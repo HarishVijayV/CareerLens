@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: stg_postings
+    columns:
+      - name: posting_id
+        tests: [not_null, unique]
+      - name: title
+        tests: [not_null]
+      - name: seniority
+        tests:
+          - accepted_values:
+              values: ["junior", "mid", "senior", "unknown"]
+
+  - name: dim_company
+    columns:
+      - name: company_id
+        tests: [not_null, unique]
+
+  - name: dim_skill
+    columns:
+      - name: skill_id
+        tests: [not_null, unique]
+
+  - name: fact_job_posting
+    columns:
+      - name: posting_id
+        tests: [not_null, unique]
+      - name: salary
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 2000000
+              config:
+                severity: warn  # a bad salary shouldn't fail the whole pipeline run —
+                # flagged for review instead, which is the realistic behavior for one
+                # noisy source among several.

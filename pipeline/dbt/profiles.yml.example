@@ -1,0 +1,29 @@
+# Copy to profiles.yml (or ~/.dbt/profiles.yml) and fill in real values.
+# Two targets on purpose: `dev` runs against local Postgres (free, fast iteration),
+# `warehouse` runs against Snowflake (free trial — the actual analytics warehouse from
+# docs/DATA_ENGINEERING.md). Same models, same tests, either target — that portability
+# is the whole point of writing transformations in dbt instead of one-off scripts.
+
+careerlens:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost
+      user: careerlens
+      password: change_me
+      port: 5432
+      dbname: careerlens
+      schema: analytics
+      threads: 4
+
+    warehouse:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: ACCOUNTADMIN
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'CAREERLENS') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'PUBLIC') }}"
+      threads: 4
