@@ -142,6 +142,19 @@ export default function ResumePage() {
     }
   }
 
+  async function deleteVersion(id: string, label: string) {
+    if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    try {
+      await api.deleteResumeVersion(id);
+      setStatus(`Deleted ${label}`);
+      await load();
+    } catch (e) {
+      // The backend refuses to delete the active or last-remaining version, and its
+      // message explains what to do instead — surface it verbatim.
+      setError(e instanceof ApiError ? e.message : "Could not delete");
+    }
+  }
+
   async function download(fmt: "tex" | "txt" | "pdf") {
     if (fmt === "pdf") {
       try {
@@ -400,23 +413,29 @@ export default function ResumePage() {
             <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
               <h2 className="mb-1 text-base font-semibold">Versions</h2>
               <p className="mb-3 text-[11px] text-zinc-500">Click any version to restore it.</p>
-              <ul className="max-h-52 space-y-1.5 overflow-y-auto">
+              <ul className="max-h-60 space-y-1.5 overflow-y-auto">
                 {versions.map((v) => (
-                  <li key={v.id}>
+                  <li
+                    key={v.id}
+                    className={`group flex items-start gap-1 rounded border px-2 py-1.5 ${
+                      v.is_active
+                        ? "border-zinc-900 dark:border-white"
+                        : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    }`}
+                  >
                     <button
                       onClick={() =>
                         api.activateResumeVersion(v.id).then(load).catch((e) => setError(e.message))
                       }
-                      className={`w-full rounded border px-2 py-1.5 text-left text-xs ${
-                        v.is_active
-                          ? "border-zinc-900 dark:border-white"
-                          : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                      }`}
+                      className="min-w-0 flex-1 text-left text-xs"
+                      title={v.is_active ? "Currently active" : "Click to make this the active version"}
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
                         <span className="truncate font-medium">{v.label}</span>
                         {v.is_active && (
-                          <span className="shrink-0 text-[10px] text-zinc-500">active</span>
+                          <span className="shrink-0 rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-white dark:bg-white dark:text-zinc-900">
+                            active
+                          </span>
                         )}
                       </div>
                       <div className="mt-0.5 text-[10px] text-zinc-500">
@@ -426,6 +445,17 @@ export default function ResumePage() {
                         {new Date(v.created_at).toLocaleDateString()}
                       </div>
                     </button>
+
+                    {!v.is_active && (
+                      <button
+                        onClick={() => deleteVersion(v.id, v.label)}
+                        title="Delete this version"
+                        aria-label={`Delete ${v.label}`}
+                        className="shrink-0 rounded border border-zinc-200 px-2 py-0.5 text-xs text-zinc-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:border-zinc-700 dark:hover:bg-red-950"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

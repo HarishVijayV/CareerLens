@@ -313,6 +313,49 @@ def _compile_latex_to_pdf(latex: str) -> bytes:
         raise LatexCompileError(detail)
 
 
+@router.delete("/versions/{version_id}")
+def delete_version(
+    version_id: str,
+    claims: dict = Depends(get_current_claims),
+    db: Session = Depends(get_db),
+):
+    """Delete a resume version.
+
+    Two guards, both about not leaving the account in a broken state:
+
+    1. The ACTIVE version can't be deleted directly. Deleting it would leave the agents'
+       get_resume tool pointing at nothing. Activate a different version first — that's an
+       explicit choice about what your resume now is, rather than a silent side effect.
+
+    2. The LAST remaining version can't be deleted either, since the profile mirror would
+       be left dangling. Upload a replacement first.
+    """
+    version = (
+        db.query(ResumeVersion)
+        .filter(ResumeVersion.id == version_id, ResumeVersion.user_id == claims["sub"])
+        .first()
+    )
+    if not version:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Version not found")
+
+    total = db.query(ResumeVersion).filter(ResumeVersion.user_id == claims["sub"]).count()
+    if total <= 1:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This is your only resume. Upload a replacement before deleting it.",
+        )
+
+    if version.is_active:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This version is active. Select a different version first, then delete this one.",
+        )
+
+    db.delete(version)
+    db.commit()
+    return {"deleted": True, "label": version.label}
+
+
 @router.get("/download")
 def download_resume(
     fmt: str = Query("tex", pattern="^(tex|txt|pdf)$"),

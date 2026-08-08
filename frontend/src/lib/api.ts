@@ -271,6 +271,8 @@ export const api = {
     }),
   activateResumeVersion: (id: string) =>
     request<ResumeVersion>(`/resume/versions/${id}/activate`, { method: "POST" }),
+  deleteResumeVersion: (id: string) =>
+    request<{ deleted: boolean; label: string }>(`/resume/versions/${id}`, { method: "DELETE" }),
 
   uploadResume: async (file: File): Promise<ResumeVersion> => {
     const form = new FormData();

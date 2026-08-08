@@ -206,7 +206,14 @@ export default function AssistantPage() {
                         >
                           {expandedTools === i ? "Hide" : "Show"} {turn.answer.tool_calls.length}{" "}
                           tool call{turn.answer.tool_calls.length === 1 ? "" : "s"} ·{" "}
-                          {turn.answer.tool_calls.map((t) => t.tool).join(", ")}
+                          {Object.entries(
+                            turn.answer.tool_calls.reduce<Record<string, number>>((acc, c) => {
+                              acc[c.tool] = (acc[c.tool] ?? 0) + 1;
+                              return acc;
+                            }, {})
+                          )
+                            .map(([tool, n]) => (n > 1 ? `${tool} ×${n}` : tool))
+                            .join(", ")}
                         </button>
 
                         {expandedTools === i && (
