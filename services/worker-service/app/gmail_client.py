@@ -69,6 +69,25 @@ class GmailClient:
             params={"q": query, "maxResults": max_results},
             timeout=30.0,
         )
+
+        if response.status_code == 403:
+            # A bare 403 here is genuinely ambiguous — it means one of two completely
+            # different problems with completely different fixes. Google says which in the
+            # response body, so surface that instead of letting httpx raise a generic
+            # HTTPStatusError that sends you debugging the wrong thing.
+            detail = response.text[:400]
+            if "insufficient" in detail.lower() or "scope" in detail.lower():
+                raise PermissionError(
+                    "Gmail returned 403: the token lacks gmail.readonly. This happens when "
+                    "the read-permission checkbox wasn't ticked on the consent screen. "
+                    "Disconnect Gmail and reconnect, ticking every permission."
+                )
+            raise PermissionError(
+                "Gmail returned 403. Most likely the Gmail API isn't enabled on this "
+                "Google Cloud project, or the app is blocked for this account. "
+                f"Google said: {detail}"
+            )
+
         response.raise_for_status()
         return [m["id"] for m in response.json().get("messages", [])]
 

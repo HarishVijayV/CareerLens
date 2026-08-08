@@ -120,9 +120,18 @@ class _OpenAICompatibleProvider(LLMProvider):
         ]
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResponse:
-        resp = self._client.chat.completions.create(
-            model=self._model, messages=messages, tools=self._to_openai_tools(tools)
-        )
+        kwargs = {"model": self._model, "messages": messages}
+
+        # Only include `tools` when there ARE tools. Passing tools=None explicitly is not
+        # the same as omitting the field: OpenAI tolerates the null, but Fireworks rejects
+        # it with "Input should be a valid list, field: 'tools', value: None". That broke
+        # every tool-less agent (email_classifier, skill_extractor) while tool-using agents
+        # worked fine — a confusing split until you notice what they have in common.
+        openai_tools = self._to_openai_tools(tools)
+        if openai_tools:
+            kwargs["tools"] = openai_tools
+
+        resp = self._client.chat.completions.create(**kwargs)
         choice = resp.choices[0].message
 
         tool_calls = []

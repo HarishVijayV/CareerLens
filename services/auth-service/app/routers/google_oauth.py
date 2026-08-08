@@ -133,6 +133,20 @@ def callback(
     refresh_token = tokens.get("refresh_token")
     access_token = tokens.get("access_token")
 
+    # Google returns the scopes it ACTUALLY granted, which can be a subset of what we
+    # asked for — the consent screen lets the user untick individual permissions. Storing
+    # our requested list instead of this one is a real trap: the database then claims we
+    # have Gmail access while every API call 403s, and the logs point nowhere useful.
+    granted_scopes = tokens.get("scope", "")
+
+    if "gmail.readonly" not in granted_scopes:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Gmail read permission was not granted — the 'Read your email messages and "
+            "settings' checkbox was left unticked on the consent screen. Nothing was "
+            "saved. Click Connect Gmail again and tick every permission.",
+        )
+
     if not refresh_token:
         # Google only returns a refresh token on FIRST consent unless prompt=consent is
         # sent. Surfacing this clearly beats a mysterious sync failure days later.
@@ -162,7 +176,7 @@ def callback(
     credential.encrypted_refresh_token = encrypt(refresh_token)
     credential.encrypted_access_token = encrypt(access_token) if access_token else None
     credential.access_token_expires_at = expires_at
-    credential.scopes = " ".join(SCOPES)
+    credential.scopes = granted_scopes
     credential.google_email = google_email
 
     db.add(credential)
