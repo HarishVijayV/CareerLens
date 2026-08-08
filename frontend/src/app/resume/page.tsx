@@ -250,7 +250,7 @@ export default function ResumePage() {
       )}
 
       {active?.exists && (
-        <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
           {/* ---------- viewer / editor ---------- */}
           <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
@@ -295,7 +295,7 @@ export default function ResumePage() {
             </div>
 
             {tab === "document" ? (
-              <div className="h-[600px] bg-zinc-100 dark:bg-zinc-950">
+              <div className="h-[calc(100vh-230px)] min-h-[600px] bg-zinc-100 dark:bg-zinc-950">
                 {pdfError ? (
                   <div className="p-5">
                     <p className="whitespace-pre-wrap text-xs text-red-600">{pdfError}</p>
@@ -320,7 +320,7 @@ export default function ResumePage() {
                   else setDraftLatex(e.target.value);
                   setDirty(true);
                 }}
-                className="h-[600px] w-full resize-none bg-transparent p-4 font-mono text-xs outline-none"
+                className="h-[calc(100vh-230px)] min-h-[600px] w-full resize-none bg-transparent p-4 font-mono text-xs outline-none"
                 spellCheck={false}
               />
             )}
@@ -328,7 +328,7 @@ export default function ResumePage() {
 
           {/* ---------- assistant + versions ---------- */}
           <div className="space-y-5">
-            <section className="flex h-[380px] flex-col rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+            <section className="flex h-[440px] flex-col rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
               <h2 className="border-b border-zinc-200 px-4 py-2.5 text-sm font-semibold dark:border-zinc-800">
                 Resume assistant
               </h2>

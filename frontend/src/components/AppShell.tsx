@@ -71,7 +71,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-6 py-3">
           <div className="flex items-center gap-6">
             <Link href="/dashboard" className="font-semibold tracking-tight">
               CareerLens
@@ -160,7 +160,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-[1600px] px-6 py-8">{children}</main>
     </div>
   );
 }

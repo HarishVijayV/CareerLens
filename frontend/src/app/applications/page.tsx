@@ -219,21 +219,30 @@ export default function ApplicationsPage() {
 
       {funnel && (
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatTile label="Applications" value={String(funnel.total_applications)} />
+          <StatTile label="Applications" value={String(funnel.total_applications)} hint="total sent" />
           <StatTile
-            label="Interviews"
+            label="Interviews reached"
             value={String(funnel.stages.find((s) => s.stage === "interview_invite")?.count ?? 0)}
+            hint="ever — includes later rejections"
           />
-          <StatTile label="Offers" value={String(funnel.stages.find((s) => s.stage === "offer")?.count ?? 0)} />
-          <StatTile label="Awaiting reply" value={String(funnel.awaiting_response)} />
+          <StatTile
+            label="Offers reached"
+            value={String(funnel.stages.find((s) => s.stage === "offer")?.count ?? 0)}
+            hint="ever — includes ones you declined"
+          />
+          <StatTile
+            label="Rejected"
+            value={String(funnel.rejected)}
+            hint="current status"
+          />
         </div>
       )}
 
       <div className="mb-6 grid gap-6 lg:grid-cols-2">
         {funnel && funnel.total_applications > 0 && (
           <ChartFrame
-            title="Application funnel"
-            subtitle="Counted from events, so an application that was later rejected still counts as having reached interview"
+            title="Application funnel — how far you got"
+            subtitle="Cumulative history: once an application REACHES a stage it stays counted, even if it was rejected later. That's the point — it measures how far you got, not where things ended up."
             columns={["Stage", "Count", "% of applied"]}
             rows={funnel.stages.map((s) => [
               STATUS_LABEL[s.stage] ?? s.stage,
