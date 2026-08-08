@@ -69,12 +69,31 @@ JOB_PHRASES = (
     '"application update" OR "regarding your application"'
 )
 
-GMAIL_QUERY = (
-    f"newer_than:180d ("
-    f"from:({ATS_SENDERS}) "
-    f"OR subject:({JOB_PHRASES})"
-    f")"
-)
+# How far back to look. 30 days by default, down from 180.
+#
+# The window is the single biggest driver of sync time: it multiplies BOTH the Gmail
+# round-trips and the LLM calls, and a 6-month window re-scans the same months on every
+# run for candidates that were almost all classified the first time.
+#
+# 30 days also matches how the feature is actually used. Application status moves within
+# weeks — an ATS mail older than a month has already been superseded by a rejection, an
+# offer, or silence. Anything genuinely older is already in the DB from a previous sync,
+# because processed messages are deduped on gmail_message_id and never re-classified.
+#
+# Overridable per call and by env var, because the FIRST sync on a new account is the one
+# case where a wider window is right — there's no history to have caught the older mail.
+DEFAULT_LOOKBACK_DAYS = int(os.getenv("GMAIL_LOOKBACK_DAYS", "30"))
+
+
+def build_gmail_query(lookback_days: int = DEFAULT_LOOKBACK_DAYS) -> str:
+    """Compose the Gmail search. Built as a function so the window is a parameter rather
+    than baked into a module constant that can only be changed by editing code."""
+    return (
+        f"newer_than:{lookback_days}d ("
+        f"from:({ATS_SENDERS}) "
+        f"OR subject:({JOB_PHRASES})"
+        f")"
+    )
 
 # Only these statuses represent a real application. The classifier is explicitly allowed
 # to say "not_job_related", and we must honour that rather than forcing every newsletter
@@ -117,7 +136,11 @@ def _classify(email: dict) -> dict | None:
 
 
 @celery_app.task(name="app.tasks.email_sync.sync_inbox")
-def sync_inbox(user_id: str, max_messages: int = 40) -> dict:
+def sync_inbox(
+    user_id: str,
+    max_messages: int = 40,
+    lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+) -> dict:
     if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
         return {"status": "not_configured", "detail": "GOOGLE_CLIENT_ID/SECRET not set"}
 
@@ -135,8 +158,14 @@ def sync_inbox(user_id: str, max_messages: int = 40) -> dict:
             return {"status": "decrypt_failed", "detail": "Re-connect Gmail (encryption key changed?)"}
 
         client = GmailClient(refresh_token, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
-        message_ids = client.list_message_ids(GMAIL_QUERY, max_results=max_messages)
-        logger.info("gmail sync user=%s candidates=%d", user_id, len(message_ids))
+        query = build_gmail_query(lookback_days)
+        message_ids = client.list_message_ids(query, max_results=max_messages)
+        logger.info(
+            "gmail sync user=%s lookback=%dd candidates=%d",
+            user_id,
+            lookback_days,
+            len(message_ids),
+        )
 
         # Skip messages already processed. This is why gmail_message_id is UNIQUE on
         # application_events: re-running a sync must never duplicate history, and the DB

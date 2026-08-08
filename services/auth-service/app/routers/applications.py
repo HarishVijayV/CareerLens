@@ -8,7 +8,7 @@ applications by itself is just a spreadsheet.
 """
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -21,20 +21,33 @@ router = APIRouter(prefix="/applications", tags=["applications"])
 
 
 @router.post("/sync-inbox")
-def trigger_inbox_sync(claims: dict = Depends(get_current_claims)):
+def trigger_inbox_sync(
+    days: int = Query(30, ge=1, le=365, description="how many days of mail to scan"),
+    claims: dict = Depends(get_current_claims),
+):
     """Kick off a Gmail sync in the background and return immediately.
 
     Returning a task id instead of the result is the point: the sync makes N Gmail calls
     and N LLM calls, which is far too slow to hold an HTTP request open for. The UI polls
     /applications afterwards.
+
+    `days` defaults to 30 because that's what routine syncs need — status moves within
+    weeks, and anything older was already captured by an earlier run (messages are deduped
+    on gmail_message_id, so nothing is ever classified twice). The parameter exists for the
+    first sync on a freshly-connected account, where there IS no earlier run to have caught
+    the older mail.
     """
     import os
 
     from celery import Celery
 
     celery = Celery(broker=os.getenv("REDIS_URL", "redis://redis:6379/0"))
-    task = celery.send_task("app.tasks.email_sync.sync_inbox", args=[claims["sub"]])
-    return {"queued": True, "task_id": task.id}
+    task = celery.send_task(
+        "app.tasks.email_sync.sync_inbox",
+        # Positional args must line up with sync_inbox(user_id, max_messages, lookback_days).
+        kwargs={"user_id": claims["sub"], "lookback_days": days},
+    )
+    return {"queued": True, "task_id": task.id, "lookback_days": days}
 
 # Ordered pipeline stages. Order matters for the funnel: each stage counts applications
 # that reached AT LEAST that far.
