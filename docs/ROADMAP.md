@@ -1,69 +1,89 @@
-# Roadmap — Phased Build Plan
+# Roadmap — What's Done, What's Next
 
-Local-first. Cloud is a later phase, deliberately — get one machine working end to end before
-paying for infrastructure or fighting cloud IAM permissions.
+Local-first by design: get one machine working end to end before paying for cloud
+infrastructure or fighting IAM.
 
-## Phase 0 — Scaffold (this session)
-- Repo structure, all docs, docker-compose skeleton, empty-but-runnable services, pipeline
-  script skeletons, frontend skeleton. Goal: `docker compose up` boots without crashing.
+---
 
-## Phase 1 — Auth + Gateway, for real
-- Auth Service: signup/login/refresh/logout fully working against Postgres, bcrypt hashing,
-  JWT + refresh cookie flow, RBAC.
-- Gateway: routes to Auth Service, auth middleware, CORS, rate limiting via Redis.
-- Frontend: signup/login pages, protected dashboard shell.
-- **Checkpoint:** you can register, log in, see a protected page, get logged out on expiry,
-  refresh silently.
+## DONE — Phase 0: Scaffold
+Repo structure, all docs, docker-compose, six services, pipeline scripts, frontend.
 
-## Phase 2 — Data pipeline v1 (small scale)
-- `pipeline/ingestion`: synthetic generator producing ~100k rows first (prove correctness
-  before scaling up), plus one real job API integration.
-- `pipeline/spark_jobs/etl_clean_jobs.py` running locally against those files (skip HDFS at
-  first — local filesystem is fine to prove the Spark logic).
-- Curated output lands in Postgres. A simple dashboard page lists jobs.
-- **Checkpoint:** real (or synthetic) job postings are queryable from the app.
+## DONE — Phase 1: Auth + Gateway
+- Signup, login, logout, `/me`, and **refresh with token rotation** — all working
+- bcrypt password hashing (with the 72-byte limit handled), JWT access tokens,
+  opaque refresh tokens stored hashed, httpOnly `SameSite=Lax` cookies
+- Gateway: auth middleware, Redis rate limiting, CORS, request logging, service proxying
+- RBAC dependency (`require_role`)
+- Frontend: signup/login/dashboard, session handling
+- **Verified:** full flow tested through the gateway; CORS preflight + credentialed
+  cookies confirmed from the frontend origin. 24 tests pass.
 
-## Phase 3 — Scale the pipeline up + add HDFS/Kafka
-- Bring up single-node Hadoop via Docker; point the Spark job at HDFS instead of local files.
-- Scale the generator to millions of rows.
-- Add the MapReduce benchmark job and record real before/after numbers.
-- Wire Kafka: scraper publishes `new-posting-scraped`, a consumer reacts.
-- **Checkpoint:** you have your own "15M+ records, X% faster with Spark" numbers, measured.
+## DONE — Phase 2: Data pipeline
+- Synthetic generator (deterministic, injects duplicates + messy salaries + seasonality)
+- Real job-board ingestion — Adzuna (India + USA), Remotive, with a title-based relevance
+  filter added after the API returned unrelated roles
+- PySpark ETL: dedupe, salary cleaning via native SQL, 4 aggregate tables, skills bridge table
+- **Verified:** 200,000 rows → 195,959 after removing 4,041 duplicates
 
-## Phase 4 — Orchestration + warehouse
-- Airflow DAG scheduling the whole pipeline.
-- dbt project: star schema models + data-quality tests, targeting Postgres locally and
-  Snowflake (free trial) for the warehouse layer.
-- **Checkpoint:** one Airflow DAG run takes raw data all the way to warehouse tables, with
-  passing dbt tests.
+## DONE — Phase 3: Scale + benchmark
+- Hadoop Streaming mapper/reducer, and the same aggregation in Spark
+- Benchmark runs both N times and reports medians, with a correctness assertion that both
+  engines agree
+- **Verified: Spark 57.1% faster (2.33×)** — your own measured number, not an inherited claim
+- Kafka is running in compose; event publishing is wired into the worker service but the
+  pipeline is currently batch-driven
 
-## Phase 5 — Agentic AI copilot
-- LLM provider abstraction + hand-rolled orchestrator with 2-3 sub-agents (skill extractor,
-  resume matcher, resume tailor) against real data from Phase 2-4.
-- LangGraph re-implementation of the same agents.
-- **Checkpoint:** you can ask "match my resume against job X" and get a real, data-backed
-  answer.
+## DONE — Phase 4: Orchestration + warehouse
+- Airflow DAG: 7 tasks, correct fan-in, retries, **validated — 0 import errors**
+- dbt: staging + star schema (fact, 2 dims, bridge), custom `accepted_range` generic test
+  written from scratch instead of pulling in dbt_utils
+- **Verified: 5 models built, 17/17 data-quality tests pass** against live Postgres
+- Snowflake target configured in `profiles.yml` (same models, different target)
 
-## Phase 6 — Gmail integration + application tracking
-- Google OAuth, Gmail read-only sync in the Worker Service, email-classifier agent, funnel
-  analytics (insight agent), resume-version A/B tracking.
-- **Checkpoint:** the app can tell you your real application funnel and which resume version
-  performs better.
+## DONE — Phase 5: Agentic AI
+- Tool-calling loop written from scratch, returning a full trace of every call
+- 5 agents, each with an explicit tool allow-list enforced at execution time
+- Deterministic routing *and* LLM routing, with a documented reason for both
+- Provider abstraction: Gemini / Fireworks / OpenAI / Anthropic, swappable by config
+- LangGraph implementation of the same flow, for the framework-vs-scratch comparison
+- `/copilot` page renders every tool call so the agent is visibly real
+- **Needs your API key to run** — see [SETUP_CHECKLIST.md](../SETUP_CHECKLIST.md)
 
-## Phase 7 — DevOps hardening
-- GitHub Actions: lint/test → build images → push to GHCR → (later) deploy.
-- Basic Prometheus + Grafana for service health/metrics.
-- **Checkpoint:** a push to `main` automatically produces a tested, versioned image.
+## DONE — Phase 7 (partial): CI
+GitHub Actions: lint → test → frontend build → build all six images. Publish job written
+but disabled until a registry exists.
 
-## Phase 8 — Cloud (≈ one month after local is solid)
-- Pick one provider (start with the one you're most likely to be asked about — AWS is the
-  safest default for job interviews). Move storage to S3, managed Postgres (RDS), managed
-  Kubernetes (EKS), Spark to EMR or keep on a VM to start cheaply.
-- Kubernetes: Helm charts, Ingress, Secrets/ConfigMaps for what's currently `.env`.
-- **Checkpoint:** the same system runs in the cloud with no pipeline-logic changes — only
-  infrastructure changes, which is the whole point of Phase 0-7 being built the way they are.
+---
 
-## Ground rule for every phase
+## NEXT — Phase 6: Gmail + application tracking
+The remaining product feature. Needs Google OAuth credentials (free).
 
-Don't move to the next phase until you can explain the current one out loud, unaided, in under
-two minutes — that's the actual success metric for a resume project, not "does it run."
+- Google OAuth flow, Gmail readonly scope, encrypted token storage
+- Worker task polls the inbox; the `email_classifier` agent (already written) labels each
+  message applied / rejected / interview / offer
+- `fact_application` table + funnel analytics: applied → interview → offer
+- Resume-version A/B: which version actually gets more replies
+- Resume tailoring to LaTeX + PDF compile via a Dockerized `texlive` image
+
+## NEXT — Phase 8: Cloud (~1 month out)
+Nothing in the pipeline logic changes — only where storage and compute physically run.
+
+| Local | AWS | Azure | OCI |
+|---|---|---|---|
+| HDFS / local FS | S3 | Blob Storage | Object Storage |
+| Local Spark | EMR / Glue | HDInsight / Synapse | Data Flow |
+| Docker Compose | ECS / EKS | AKS | OKE |
+| Self-hosted Postgres | RDS | Azure DB for PostgreSQL | OCI PostgreSQL |
+| Self-hosted Kafka | MSK | Event Hubs | OCI Streaming |
+
+Then: Kubernetes manifests → Helm charts → Ingress → Secrets/ConfigMaps replacing `.env`
+→ Prometheus + Grafana → enable the CI publish job.
+
+---
+
+## Ground rule
+
+Don't move on until you can explain the current phase out loud, unaided, in under two
+minutes. For a portfolio project that's the actual success metric — not "does it run".
+[docs/LESSONS.md](LESSONS.md) is the best material for this: 14 real bugs, each with what
+it teaches.

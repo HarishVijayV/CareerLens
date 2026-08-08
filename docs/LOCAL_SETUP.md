@@ -1,11 +1,27 @@
 # Running CareerLens Locally
 
+> **Already set up on this machine.** Java 17, winutils, Docker services, `.env` with a
+> generated JWT secret, and a fully loaded warehouse are all in place. See
+> [../SETUP_CHECKLIST.md](../SETUP_CHECKLIST.md) for the only steps left (API keys).
+> This document is the full reference, e.g. for setting up on a different machine.
+
 ## Prerequisites
 
-- Docker Desktop (you have 29.x — good)
-- Python 3.11+ (you have 3.11.7 — good, run pipeline scripts outside Docker for speed)
-- Node.js 18+ (you have 25.x — good, for the frontend)
+- Docker Desktop
+- Python 3.11+
+- Node.js 18+
 - Git
+- **Java 17** — required by Spark. If `java -version` fails:
+  ```bash
+  pip install install-jdk && python -c "import jdk; print(jdk.install('17', jre=True))"
+  ```
+  `pipeline/spark_jobs/spark_common.py` auto-detects it afterwards.
+- **Windows only — winutils**, or every Spark *write* fails:
+  ```bash
+  mkdir -p ~/hadoop/bin && cd ~/hadoop/bin
+  curl -sSLO https://raw.githubusercontent.com/cdarlint/winutils/master/hadoop-3.3.6/bin/winutils.exe
+  curl -sSLO https://raw.githubusercontent.com/cdarlint/winutils/master/hadoop-3.3.6/bin/hadoop.dll
+  ```
 
 ## 1. Configure environment
 
@@ -57,18 +73,33 @@ Stop it when you're done to save your machine's resources:
 docker compose --profile bigdata down
 ```
 
-## 4. Run pipeline scripts (outside Docker, faster for iteration)
+## 4. Run the data pipeline
+
+One command runs every step (generate → fetch real jobs → Spark ETL → train model →
+load warehouse → dbt build + test):
 
 ```bash
 cd pipeline
-python -m venv .venv
-.venv\Scripts\activate        # Windows
 pip install -r requirements.txt
+python run_pipeline.py
+```
 
-python ingestion/generate_synthetic_data.py --rows 100000 --out data/raw/postings.jsonl
-python spark_jobs/etl_clean_jobs.py --input data/raw/postings.jsonl --output data/curated/postings.parquet
+Useful variations:
+
+```bash
+python run_pipeline.py --rows 1000000    # scale up
+python run_pipeline.py --skip-real       # offline (no job-board APIs)
+python run_pipeline.py --benchmark       # include MapReduce vs Spark
+python run_pipeline.py --only spark,dbt  # re-run just some steps
+```
+
+Individual scripts still work standalone, which is what makes debugging one step easy:
+
+```bash
+python ingestion/generate_synthetic_data.py --rows 200000 --out data/raw/postings.jsonl
+python spark_jobs/etl_clean_jobs.py --input "data/raw/*.jsonl" --output data/curated/postings.parquet
 python spark_jobs/mllib_salary_model.py --input data/curated/postings.parquet
-python mapreduce_demo/benchmark_compare.py --input data/raw/postings.jsonl
+python mapreduce_demo/benchmark_compare.py --input data/raw/postings.jsonl --runs 3
 ```
 
 ## 5. Run the frontend

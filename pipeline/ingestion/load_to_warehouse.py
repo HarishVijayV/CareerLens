@@ -87,7 +87,12 @@ def load_table(conn: psycopg.Connection, df: pd.DataFrame, table: str) -> None:
     column_defs = ", ".join(f'"{c}" {pg_types[c]}' for c in columns)
 
     with conn.cursor() as cur:
-        cur.execute(f'DROP TABLE IF EXISTS raw."{table}"')
+        # CASCADE is required, not lazy: dbt's staging models are VIEWS over raw.*, so a
+        # plain DROP fails on the SECOND run with "other objects depend on it" — a bug
+        # that only appears once you re-run the pipeline, which is exactly why re-running
+        # it is part of testing. Dropping the dependent views is safe because dbt rebuilds
+        # every model on each `dbt run`, and raw.* is owned solely by this loader.
+        cur.execute(f'DROP TABLE IF EXISTS raw."{table}" CASCADE')
         cur.execute(f'CREATE TABLE raw."{table}" ({column_defs})')
 
         buffer = io.StringIO()

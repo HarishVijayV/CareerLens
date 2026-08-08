@@ -46,6 +46,27 @@ Why Spark and not plain pandas? Spark's execution model (lazy evaluation, DAG sc
 in-memory shuffles) is what actually lets it scale past what a single machine's RAM can hold —
 and that's precisely the point the MapReduce benchmark below proves.
 
+## Measured results (from actually running this)
+
+| Metric | Value |
+|---|---|
+| Raw rows in | 200,000 |
+| After dedup | 195,959 (4,041 duplicates removed) |
+| Spark vs MapReduce | **57.1% faster / 2.33× speedup** (median of 3 runs each) |
+| MLlib GBT | R² = 0.911, RMSE $11,489 |
+| LinearRegression baseline | R² = 0.178, RMSE $34,992 |
+| Warehouse rows | 195,959 postings + 980,447 skill rows |
+| dbt | 5 models, 17/17 tests passing |
+
+Committed as JSON in `pipeline/data/`. Reproduce with `python run_pipeline.py --benchmark`.
+
+**One honest caveat worth raising yourself in an interview:** the GBT model reports
+`seniority` at ~1.0 feature importance, because the synthetic generator computes salary
+almost entirely from seniority. The model correctly recovered the data-generating
+process — which is a good sanity check, but it also means R²=0.911 measures the
+generator, not the real world. On real postings you'd expect a lower R² and a much richer
+importance spread. Saying that before you're asked is worth more than the number itself.
+
 ## 4. The MapReduce vs Spark benchmark — `pipeline/mapreduce_demo/`
 
 - **`mapreduce_wordcount.py`** — the *same* aggregation (skill-frequency count across all
@@ -117,3 +138,14 @@ time, resume version used) — this is what powers the funnel analytics in the c
 | dbt | SQL transformations into a star schema + automated data-quality tests |
 | Snowflake | Cloud analytics warehouse for historical/BI queries |
 | Postgres | Fast serving layer for the live app and AI agents |
+
+## Troubleshooting (all of these were hit for real — see LESSONS.md)
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `SocketTimeoutException: Accept timed out` | Spark's Python workers can't start — `python` resolves to the Windows Store stub | handled in `spark_common.py` (pins `PYSPARK_PYTHON`) |
+| Reads work, every WRITE fails with `HADOOP_HOME unset` | Windows needs `winutils.exe` + `hadoop.dll` | installed at `~/hadoop`, auto-detected |
+| `FileNotFoundError` on a file that exists | Windows 260-char path limit | `pipeline/paths.py` adds the `\\?\` prefix |
+| Loader reports success but 0 rows | `pandas.read_parquet` on a Spark output *directory* returns empty | glob `part-*.parquet` explicitly |
+| `invalid input syntax for type bigint: "1.0"` | NULLs promote int columns to float in pandas | cast to nullable `Int64` |
+| `cannot drop table ... other objects depend on it` | dbt views depend on `raw.*`; only appears on the SECOND run | `DROP TABLE ... CASCADE` |

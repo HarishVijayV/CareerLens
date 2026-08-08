@@ -23,7 +23,6 @@ Usage:
 import argparse
 import json
 import os
-import sys
 import time
 from pathlib import Path
 
@@ -242,9 +241,18 @@ def main(out_path: Path, terms: list[str], countries: list[str], include_europe:
             f.write(json.dumps(posting) + "\n")
 
     print(f"\nWrote {len(unique):,} unique real postings -> {out_path}")
+
     if not unique:
-        print("No postings fetched. Without ADZUNA keys only Remotive runs — check network.")
-        sys.exit(1)
+        # Deliberately NOT a failure. A third-party board legitimately returning nothing
+        # for your search terms today is a normal outcome, and killing the whole pipeline
+        # over it would throw away the synthetic data that's already generated. Warn
+        # loudly, exit clean, let the ETL process whatever raw files exist.
+        print(
+            "  WARNING: no real postings matched.\n"
+            "  Usually one of: (a) no ADZUNA keys set, so only Remotive ran; or\n"
+            "  (b) your --terms are too narrow for what's listed right now.\n"
+            "  The pipeline continues with synthetic data."
+        )
 
 
 if __name__ == "__main__":

@@ -54,6 +54,11 @@ def run(input_path: str, output_path: str) -> None:
         .dropDuplicates(["posting_id"])
         .withColumn("salary_clean", clean_salary())
         .withColumn("title", F.trim(F.col("title")))
+        # Materialize skill_count BEFORE the array column is dropped below. Downstream
+        # consumers (the MLlib model, analytics) want the count, not the list, and
+        # computing it once here beats every consumer re-deriving it from the bridge
+        # table with a join.
+        .withColumn("skill_count", F.size(F.coalesce(F.col("required_skills"), F.array())))
         .filter(F.col("title").isNotNull())
     )
 

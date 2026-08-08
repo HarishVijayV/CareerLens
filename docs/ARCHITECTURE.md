@@ -41,6 +41,11 @@
                      └─────────────────────────────┘
 ```
 
+> **Note:** a sixth service, **jobs-service**, was added during the build — it serves job
+> search and the six analytics endpoints over the dbt star schema, with Redis cache-aside.
+> It's separated from agent-service because read-heavy SQL and slow LLM calls have very
+> different scaling and failure profiles.
+
 ## Why microservices, and why these five
 
 Splitting into services isn't cargo-culting — each one has a genuinely different reason to
@@ -65,18 +70,31 @@ scale or fail independently:
 
 ## Request flow example: "tailor my resume for this job"
 
-1. Frontend sends the request with an httpOnly session cookie to the **Gateway**.
-2. Gateway's auth middleware validates the JWT (from the cookie) — no valid token, no
-   forwarding. Rate-limit middleware checks Redis for this user's recent request count.
-3. Gateway forwards to **Agent Service** with the verified user ID attached in a header (the
-   downstream services trust the gateway, not the raw cookie).
-4. Agent Service's **orchestrator** parses the intent, calls the **skill-extractor** sub-agent
-   on the job description, then the **resume-tailor** sub-agent with your stored resume +
-   extracted skills.
-5. Result is cached in Redis (same job + same resume version → don't re-call the LLM), written
-   to Postgres, and returned.
-6. A Kafka event `resume.tailored` is published; the Worker Service picks it up to
-   re-render/compile the LaTeX resume to PDF in the background.
+1. Frontend sends the request with httpOnly cookies to the **Gateway** (`credentials:
+   "include"`, or the browser won't attach them cross-origin).
+2. Gateway middleware runs in order: logging → **auth** (verify the JWT signature and
+   expiry from the cookie) → **rate limit** (Redis sliding window, now keyed by the
+   user id the auth step just established).
+3. Gateway **strips any client-supplied `X-User-Id`** and sets its own from the verified
+   token, then forwards. That strip is security-critical — without it anyone could
+   impersonate any user by sending the header themselves.
+4. **Agent Service** routes to the `resume_tailor` agent, which runs the tool-calling
+   loop: `get_resume` → `get_job` → rewrite → `save_tailored_resume`. It can only call
+   those three tools; the allow-list is enforced when the tool is executed, not merely
+   suggested in the prompt.
+5. The response returns the answer **plus a trace of every tool call**, which the
+   `/copilot` page renders — so the agent's work is auditable rather than a black box.
+
+## Cross-cutting concerns, and where each lives
+
+| Concern | Where | Why there |
+|---|---|---|
+| JWT verification | Gateway only | verify once at the edge; downstream services trust the header |
+| Rate limiting | Gateway (Redis) | protects every service without repeating the logic |
+| CORS | Gateway | one public origin allow-list |
+| Caching | jobs-service (Redis) | close to the expensive queries; degrades gracefully if Redis dies |
+| Tool permissions | agent-service | enforced at execution, per agent |
+| Data quality | dbt tests | the gate between the pipeline and anything user-facing |
 
 ## Data flow: pipeline side (independent of the live app)
 

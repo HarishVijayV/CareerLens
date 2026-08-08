@@ -1,59 +1,106 @@
 # CareerLens — Job Market & Career Intelligence Platform
 
-CareerLens is a full production-style system that helps a job-seeker (you) collect real
-job-market data at scale, understand it, and act on it — with a team of AI agents doing the
-grunt work. It's built to look and behave like a real company's platform, not a tutorial app,
-so every piece of it is something you can defend in an interview.
+A production-shaped system that ingests job-market data at scale, models it into a
+warehouse, and puts a multi-agent AI copilot on top — built so every layer is something
+you can explain, not just something that runs.
 
-**In one sentence:** a data engineering pipeline that ingests job-market data at scale, a
-warehouse + analytics layer that makes sense of it, and a multi-agent AI copilot on top that
-matches your resume to jobs, tailors it, tracks your applications (including your inbox), and
-tells you what's actually working.
+**In one sentence:** a Hadoop/Spark data pipeline feeding a dbt star schema, served by
+FastAPI microservices behind an API gateway, with tool-calling AI agents and a Next.js
+frontend.
 
-> Rename freely — "CareerLens" is just a placeholder product name.
+> **Start here → [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)** — the short list of things
+> only you can do (about 15 minutes; only one step is required).
 
-## Why this project exists
+## Verified results (measured, not claimed)
 
-Read [docs/PROJECT_STORY.md](docs/PROJECT_STORY.md) for the plain-English pitch, and
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how every piece fits together.
-
-## Documentation map
-
-| Doc | What it covers |
+| What | Result |
 |---|---|
-| [docs/PROJECT_STORY.md](docs/PROJECT_STORY.md) | The elevator pitch + how to answer "walk me through this project" |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full system design (HLD), service map, data flow diagrams |
-| [docs/DATA_ENGINEERING.md](docs/DATA_ENGINEERING.md) | Hadoop/HDFS, PySpark, MapReduce benchmark, Kafka, Airflow, dbt, Snowflake — what each does and why it's there |
-| [docs/AGENTIC_AI.md](docs/AGENTIC_AI.md) | Agent/sub-agent design, tool-calling loop, LangGraph version, LLM provider abstraction |
-| [docs/AUTH_AND_SECURITY.md](docs/AUTH_AND_SECURITY.md) | JWT, sessions, cookies, refresh tokens, RBAC, rate limiting, CORS/CSRF |
-| [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) | How to run everything on your machine |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Phased build plan — local first, cloud a month later |
+| Rows processed | 200,000 → 195,959 after dedup (4,041 duplicates removed) |
+| Spark vs MapReduce | **Spark 57.1% faster (2.33×)** — median of 3 runs each, same aggregation |
+| MLlib salary model | GBT **R² = 0.911** vs LinearRegression baseline R² = 0.178 |
+| Warehouse | 195,959 postings + 980,447 skill rows in Postgres |
+| dbt | 5 models, **17/17 data-quality tests passing** |
+| Tests | 24 Python tests passing |
+| Airflow | DAG parses, 7 tasks, 0 import errors |
 
-## Repo layout
+Raw numbers: `pipeline/data/benchmark_results.json`, `pipeline/data/model_metrics.json`.
+
+## What actually runs
 
 ```
-services/            # microservices (each is its own FastAPI app + Dockerfile)
-  gateway/            # API gateway / main backend — entrypoint for the frontend
-  auth-service/        # signup/login, JWT + sessions + cookies, RBAC
-  agent-service/        # the multi-agent AI copilot (orchestrator + sub-agents)
-  worker-service/        # background jobs (Celery) — scraping, email sync, embeddings
-  notification-service/   # emails/alerts to the user
-pipeline/            # the data engineering side, independent of the web app
-  ingestion/           # scrapers / public job APIs + synthetic data generator
-  spark_jobs/           # PySpark ETL + MLlib model training
-  mapreduce_demo/        # one raw MapReduce job + benchmark vs Spark
-  airflow/dags/          # orchestration DAGs tying the pipeline together
-  dbt/                # transformation + data quality tests (Snowflake/Postgres)
-  ml/                 # model training/eval scripts (outside Spark, for smaller models)
-frontend/            # Next.js app
-infra/              # docker-compose, env templates
+Next.js frontend  ──►  API Gateway  ──►  ┌─ auth-service      (JWT, cookies, RBAC, profiles)
+  8 pages               (auth, CORS,     ├─ jobs-service      (search + 6 analytics endpoints)
+                         rate limiting)  ├─ agent-service     (5 agents, tool calling, LangGraph)
+                                         ├─ worker-service    (Celery background jobs)
+                                         └─ notification-service
+                                                │
+                                    Postgres + Redis + Kafka
+                                                ▲
+                          ┌─────────────────────┴──────────────────────┐
+                          │  DATA PIPELINE (runs independently)         │
+                          │  job APIs + synthetic generator             │
+                          │      → HDFS / local raw layer               │
+                          │      → PySpark ETL (clean, dedupe, aggregate)│
+                          │      → Spark MLlib (salary model)           │
+                          │      → Postgres + Snowflake                 │
+                          │      → dbt (star schema + 17 tests)         │
+                          │  orchestrated by Airflow                    │
+                          └────────────────────────────────────────────┘
 ```
 
 ## Quick start
 
-See [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md). Short version:
+```bash
+cp infra/.env.example infra/.env      # then add your LLM key — see SETUP_CHECKLIST.md
+cd infra && docker compose up -d      # Postgres, Redis, Kafka + 5 services
+cd ../frontend && npm install && npm run dev
+```
+
+Open http://localhost:3000. Full instructions: [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).
+
+Run the whole data pipeline in one command:
 
 ```bash
-cp infra/.env.example infra/.env
-docker compose -f infra/docker-compose.yml up -d --build
+cd pipeline && python run_pipeline.py
 ```
+
+## Documentation
+
+| Doc | What it covers |
+|---|---|
+| [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md) | **What you need to do** — API keys, first run |
+| [docs/PROJECT_STORY.md](docs/PROJECT_STORY.md) | The pitch + how to answer "walk me through this" |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, service map, request/data flow |
+| [docs/DATA_ENGINEERING.md](docs/DATA_ENGINEERING.md) | Hadoop, Spark, MapReduce, Kafka, Airflow, dbt, Snowflake |
+| [docs/AGENTIC_AI.md](docs/AGENTIC_AI.md) | The agent loop, sub-agents, tools, LangGraph comparison |
+| [docs/AUTH_AND_SECURITY.md](docs/AUTH_AND_SECURITY.md) | JWT, refresh rotation, cookies, RBAC, rate limiting |
+| [docs/LESSONS.md](docs/LESSONS.md) | **Real bugs hit while building, and what each one teaches** |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | What's done, what's next, cloud plan |
+
+## Repo layout
+
+```
+services/            five FastAPI microservices, each with its own Dockerfile
+  gateway/             single public entrypoint: auth middleware, CORS, rate limiting
+  auth-service/        signup/login/refresh, bcrypt, JWT + rotating refresh tokens, profiles
+  jobs-service/        job search + analytics over the dbt star schema, Redis cache-aside
+  agent-service/       LLM provider abstraction, 5 agents, tool registry, LangGraph version
+  worker-service/      Celery background jobs
+  notification-service/
+pipeline/            the data engineering side, independent of the web app
+  ingestion/           job-board APIs (India+USA) + synthetic generator + warehouse loader
+  spark_jobs/          PySpark ETL + MLlib model
+  mapreduce_demo/      raw MapReduce job + benchmark vs Spark
+  airflow/dags/        orchestration
+  dbt/                 star schema models + data-quality tests
+  run_pipeline.py      run the whole thing in one command
+frontend/            Next.js app (8 pages, inline-SVG charts, no chart library)
+tests/               24 tests covering security and pipeline logic
+infra/               docker-compose (core + bigdata profile), env templates
+```
+
+## Tech
+
+Python · FastAPI · PySpark · Hadoop/MapReduce · Kafka · Airflow · dbt · PostgreSQL ·
+Snowflake · Redis · Celery · Docker · GitHub Actions · Next.js · React · TypeScript ·
+Tailwind · LangGraph · Gemini/OpenAI/Anthropic/Fireworks

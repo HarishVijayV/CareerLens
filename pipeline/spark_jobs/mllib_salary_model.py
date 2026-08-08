@@ -39,7 +39,7 @@ def run(input_path: str, model_out: str | None, metrics_out: str | None) -> None
     df = (
         spark.read.parquet(input_path)
         .filter(F.col("salary_clean").isNotNull())
-        .withColumn("skill_count", F.size(F.coalesce(F.col("required_skills"), F.array())))
+        # skill_count is computed by the ETL job; this model just consumes it.
         # VectorAssembler needs numerics — booleans aren't accepted directly.
         .withColumn("remote_int", F.col("remote").cast("int"))
     )
