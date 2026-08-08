@@ -17,12 +17,69 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+/**
+ * Silent token refresh.
+ *
+ * Access tokens deliberately live only 15 minutes (see docs/AUTH_AND_SECURITY.md) — a
+ * stolen one expires fast. The cost is that every session breaks after 15 minutes unless
+ * something renews it, which is what this does: on a 401, call /auth/refresh once and
+ * replay the original request. The user never notices.
+ *
+ * The shared promise matters. A page like /applications fires several requests at once;
+ * without it, each 401 would start its own refresh, and because refresh ROTATES the token,
+ * the second call would present a token the first had already invalidated — logging the
+ * user out precisely because the rotation security worked. One in-flight refresh, everyone
+ * awaits it.
+ */
+// Exactly these four, matched EXACTLY — not a `/auth/` prefix check. Prefix matching
+// looked right and was wrong: it also excluded /auth/google/status and /auth/google/connect,
+// which are ordinary protected endpoints that should refresh like any other.
+const NO_REFRESH_RETRY = new Set([
+  "/auth/login",    // a bad password must surface as a bad password
+  "/auth/signup",
+  "/auth/refresh",  // retrying refresh on 401 would loop forever
+  "/auth/logout",
+]);
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshSession(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((r) => r.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+/** For non-JSON endpoints (file upload, PDF download) that can't go through request(),
+ *  but still need the same silent-refresh behaviour. */
+async function rawFetch(url: string, options: RequestInit): Promise<Response> {
+  let res = await fetch(url, options);
+  if (res.status === 401 && (await refreshSession())) {
+    res = await fetch(url, options);
+  }
+  return res;
+}
+
+async function request<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     credentials: "include",
     headers: { "Content-Type": "application/json", ...options.headers },
   });
+
+  if (res.status === 401 && retry && !NO_REFRESH_RETRY.has(path)) {
+    if (await refreshSession()) {
+      return request<T>(path, options, false);
+    }
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
@@ -192,7 +249,10 @@ export const api = {
     form.append("file", file);
     // No Content-Type header on purpose: the browser must set it itself so it can add
     // the multipart boundary. Setting it manually is the classic broken-upload bug.
-    const res = await fetch(`${API_BASE_URL}/resume/upload`, {
+    //
+    // rawFetch (not request) because request() JSON-encodes; but it still needs the same
+    // 401 -> refresh -> retry, or an upload started 15 minutes into a session just fails.
+    const res = await rawFetch(`${API_BASE_URL}/resume/upload`, {
       method: "POST",
       credentials: "include",
       body: form,
@@ -212,7 +272,7 @@ export const api = {
    *  setting, so the auth cookie wouldn't be attached and the gateway would 401. Fetching
    *  it ourselves and handing the iframe a blob: URL keeps the request authenticated. */
   previewResumePdf: async (): Promise<string> => {
-    const res = await fetch(`${API_BASE_URL}/resume/download?fmt=pdf`, {
+    const res = await rawFetch(`${API_BASE_URL}/resume/download?fmt=pdf`, {
       credentials: "include",
     });
     if (!res.ok) {
