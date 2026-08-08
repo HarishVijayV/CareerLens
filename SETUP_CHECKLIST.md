@@ -9,27 +9,30 @@ can do, in order. **Total time: about 15 minutes**, and only step 1 is strictly 
 
 Without this, everything works except the AI agents.
 
-**Use Google Gemini.** It's the only provider with a genuinely *permanent* free tier —
-the others give trial credits and then charge. This matters because you said you need it
-to keep working for years without paying.
+**Use Fireworks** — you already have credits there, and it's the right choice for this
+workload. Agents make **3-6 LLM calls per question** (plan -> call tool -> read result ->
+answer), and the inbox sync makes one call *per email*. Gemini's permanent free tier is
+capped per MINUTE, which stalls an agent mid-loop rather than failing cleanly.
 
-1. Go to **https://aistudio.google.com/apikey**
-2. Sign in with your Google account → **Create API key**
-3. Copy the key
-4. Open `infra/.env` and set:
+1. Go to **https://app.fireworks.ai/settings/users/api-keys**
+2. Create a key and copy it
+3. Open `infra/.env` and set:
    ```
-   LLM_PROVIDER=gemini
-   GEMINI_API_KEY=<paste your key here>
+   LLM_PROVIDER=fireworks
+   FIREWORKS_API_KEY=<paste your key here>
    ```
-5. Restart the agent service:
+4. Restart the agent service:
    ```bash
    cd infra && docker compose restart agent-service
    ```
 
-> No credit card required. Free tier is rate-limited (plenty for personal use).
-> To switch providers later, change `LLM_PROVIDER` to `fireworks`, `openai`, or
-> `anthropic` and set that provider's key — no code changes, that's what the provider
-> abstraction is for.
+> **When your Fireworks credits run out**, get a free permanent key at
+> https://aistudio.google.com/apikey, set `GEMINI_API_KEY` and flip
+> `LLM_PROVIDER=gemini`. One line, no code change — that's what the provider abstraction
+> is for, and it's a good thing to be able to say in an interview.
+>
+> If agents answer without ever calling a tool, that's the MODEL, not the code — not every
+> open model does tool-calling reliably. Try a different `FIREWORKS_MODEL`.
 
 ---
 
@@ -108,12 +111,24 @@ What you can do there:
 
 ---
 
-## Step 6 — LATER (not now): Gmail integration
+## Step 6 — OPTIONAL: Gmail application tracking
 
-Only needed for the email-tracking feature, which is Phase 6 in `docs/ROADMAP.md` and not
-built yet. When you get there: Google Cloud Console → create OAuth credentials → enable
-Gmail API (readonly scope). **Free**, and staying in "Testing" mode with yourself as a
-test user keeps it free forever.
+The feature is **fully built** — it just needs Google OAuth credentials, which are
+**free forever** while your app stays in "Testing" mode.
+
+1. https://console.cloud.google.com/ → create a project
+2. **APIs & Services → Library** → enable **Gmail API**
+3. **OAuth consent screen** → External → add your own email under **Test users**
+4. **Credentials → Create Credentials → OAuth client ID → Web application**
+5. Authorized redirect URI: `http://localhost:8000/api/auth/google/callback`
+6. Put the Client ID + Secret in `infra/.env`, then:
+   `cd infra && docker compose restart auth-service worker-service`
+
+Then open `/applications` → **Connect Gmail** → **Sync inbox**. An agent reads your
+inbox (read-only), classifies each message, and builds your applied → interview → offer
+funnel automatically.
+
+Full walkthrough: [docs/CREDENTIALS.md](docs/CREDENTIALS.md).
 
 ---
 
@@ -126,7 +141,8 @@ You don't need to touch any of this — it's installed, configured, and verified
 - `infra/.env` created with a strong random JWT secret already generated
 - 195,959 job postings processed and loaded into the warehouse
 - dbt star schema built, all 17 data-quality tests passing
-- 24 Python tests passing
+- 33 Python tests passing
+- LaTeX engine installed in the auth-service image, so resume PDF export works
 
 ## Verified results already measured on your machine
 
@@ -138,6 +154,8 @@ You don't need to touch any of this — it's installed, configured, and verified
 | Warehouse | 195,959 postings + 980,447 skill rows |
 | dbt | 5 models, **17/17 tests pass** |
 | Airflow DAG | 7 tasks, parses with 0 import errors |
+| Tests | 33 passing |
+| Resume PDF export | verified — real compiled PDF from LaTeX |
 
 These are *your* numbers, measured — use them on your resume instead of the old inherited
 "40%" claim. Full JSON in `pipeline/data/benchmark_results.json` and
