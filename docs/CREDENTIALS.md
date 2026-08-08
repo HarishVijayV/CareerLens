@@ -27,23 +27,48 @@ Missing keys degrade one feature and say so clearly — they never produce a mys
 Set `LLM_PROVIDER` and the matching key. The provider abstraction means switching is a
 config change, never a code change.
 
-| Provider | Free tier | Get a key |
-|---|---|---|
-| **`gemini`** ← default | **Permanent free tier**, rate-limited, no card | https://aistudio.google.com/apikey |
-| `fireworks` | Trial credits, then paid | https://fireworks.ai |
-| `openai` | Trial credits, then paid | https://platform.openai.com/api-keys |
-| `anthropic` | Trial credits, then paid | https://console.anthropic.com |
+| Provider | Free tier | Rate limits | Get a key |
+|---|---|---|---|
+| **`fireworks`** ← default | Trial credits (~$1 free, then paid) | Generous | https://fireworks.ai → API Keys |
+| `gemini` | **Permanent** free tier | **Tight per-MINUTE cap** | https://aistudio.google.com/apikey |
+| `openai` | Trial credits, then paid | Generous | https://platform.openai.com/api-keys |
+| `anthropic` | Trial credits, then paid | Generous | https://console.anthropic.com |
 
 ```bash
-LLM_PROVIDER=gemini
-GEMINI_API_KEY=...
+LLM_PROVIDER=fireworks
+FIREWORKS_API_KEY=...
 ```
 
-**Gemini is the default specifically because you need this to keep working for years
-without paying.** The others expire into a bill.
+### Why per-minute limits matter more here than for a normal chatbot
 
-**Without it:** the Copilot page returns a 502 that names the problem. Jobs, analytics,
-auth, and the whole pipeline are unaffected.
+**An agent makes MANY LLM calls per user request.** The tool-calling loop is: plan → call
+a tool → feed the result back → possibly call another → answer. That's typically **3–6
+calls for one question**, plus one more when the LLM router picks the agent.
+
+Worse, the email sync is **one call per email** — a 40-message inbox scan fires 40 calls
+in a burst.
+
+A tight per-minute quota doesn't fail cleanly here; it stalls the agent **mid-loop**,
+leaving a half-finished trace. That's why a provider with generous throughput beats a
+permanently-free-but-throttled one for this workload specifically.
+
+### The pragmatic strategy
+
+1. **Now:** Fireworks, while you have credits. Best throughput for agent loops.
+2. **When credits run out:** switch to `gemini` — one line in `.env`, no code change.
+   Still fine for interactive Copilot use; just avoid large inbox syncs.
+3. Keep `GEMINI_API_KEY` filled in as the standing fallback.
+
+Being able to say *"I built a provider abstraction so I could route by cost and rate
+limit"* is itself a good interview point — it's exactly why real teams build this layer.
+
+**Model note:** `FIREWORKS_MODEL` defaults to a Llama 3.1 70B instruct model. Not every
+open model does tool-calling reliably, and the agents depend on it — if you see agents
+answering without ever calling a tool, try a different model from the Fireworks catalog
+rather than assuming the agent code is broken.
+
+**Without any key:** the Copilot page returns a 502 that names the problem. Jobs,
+analytics, auth, and the whole pipeline are unaffected.
 
 ---
 
