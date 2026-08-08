@@ -155,6 +155,9 @@ services:
         condition: service_healthy
     volumes:
       - ../services/jobs-service/app:/app/app
+    networks:
+      - default
+      - mcp-net
 
   worker-service:
     restart: unless-stopped
@@ -180,6 +183,29 @@ services:
         condition: service_healthy
     volumes:
       - ../services/notification-service/app:/app/app
+
+  # MCP server — exposes ONLY aggregate job-market data to external MCP clients.
+  # Note what it depends on: jobs-service, and nothing else. It holds no database
+  # credentials and has no route to auth-service, so the privacy boundary in its
+  # docstring is enforced by deployment topology, not just by code.
+  mcp-server:
+    restart: unless-stopped
+    build: ../services/mcp-server
+    environment:
+      JOBS_SERVICE_URL: http://jobs-service:8000
+    ports:
+      - "${MCP_SERVER_PORT:-8005}:8005"
+    depends_on:
+      - jobs-service
+    volumes:
+      - ../services/mcp-server/app:/app/app
+    # ONLY mcp-net — deliberately NOT on `default`. This is what makes the privacy
+    # boundary real rather than documented: auth-service, postgres and redis are not
+    # resolvable from this container at all, so there is no network path to a resume,
+    # an inbox, or a user account. Matters especially because auth-service trusts the
+    # X-User-Id header, which a same-network attacker could otherwise forge.
+    networks:
+      - mcp-net
 
   frontend:
     restart: unless-stopped
@@ -279,6 +305,11 @@ services:
       - ../pipeline/airflow/dags:/opt/airflow/dags
       - ../pipeline:/opt/airflow/pipeline
     profiles: [bigdata]
+
+networks:
+  default:
+  # Isolated segment shared by exactly two services: mcp-server and jobs-service.
+  mcp-net:
 
 volumes:
   postgres_data:
