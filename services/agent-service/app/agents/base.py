@@ -19,6 +19,7 @@ compare them to see exactly what a framework adds and what it hides.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 
 from app.llm.provider import LLMResponse, get_llm_provider
@@ -37,6 +38,7 @@ class AgentRun:
     tool_calls: list[dict] = field(default_factory=list)
     iterations: int = 0
     stopped_early: bool = False
+    duplicate_calls: int = 0   # repeats served from cache instead of re-executed
 
 
 class Agent:
@@ -65,6 +67,15 @@ class Agent:
 
         trace = AgentRun(final_answer="")
 
+        # Cache of (tool, arguments) -> result for THIS run.
+        #
+        # Models genuinely do re-request the same call: an observed run issued search_jobs
+        # 13 times with identical arguments while "thinking". Each repeat is a real HTTP
+        # round trip and pushes the loop toward its iteration cap without adding
+        # information. Serving the cached result — and telling the model it's cached —
+        # both cuts cost and nudges it to move on.
+        seen_calls: dict[str, str] = {}
+
         for iteration in range(1, self.max_iterations + 1):
             trace.iterations = iteration
             response: LLMResponse = provider.chat(messages, tools=self.tools or None)
@@ -79,16 +90,33 @@ class Agent:
             messages.append(provider.assistant_tool_call_message(response))
 
             for tool_call in response.tool_calls:
-                result = dispatch_tool_call(
-                    tool_call.name, tool_call.arguments, allowed_tools=self.allowed_tools
-                )
-                trace.tool_calls.append(
-                    {
-                        "tool": tool_call.name,
-                        "arguments": tool_call.arguments,
-                        "result_preview": result[:400],
-                    }
-                )
+                signature = f"{tool_call.name}:{json.dumps(tool_call.arguments, sort_keys=True)}"
+
+                if signature in seen_calls:
+                    cached = seen_calls[signature]
+                    # Say explicitly that it's a repeat. A silently identical result invites
+                    # the model to ask again; naming it usually stops the loop.
+                    result = json.dumps(
+                        {
+                            "note": "Identical call already made in this conversation — "
+                            "cached result below. Use it and move on.",
+                            "result": cached,
+                        }
+                    )
+                    trace.duplicate_calls += 1
+                else:
+                    result = dispatch_tool_call(
+                        tool_call.name, tool_call.arguments, allowed_tools=self.allowed_tools
+                    )
+                    seen_calls[signature] = result
+                    trace.tool_calls.append(
+                        {
+                            "tool": tool_call.name,
+                            "arguments": tool_call.arguments,
+                            "result_preview": result[:400],
+                        }
+                    )
+
                 messages.append(provider.tool_result_message(tool_call, result))
 
         # Ran out of iterations. Ask once more with tools withheld, which forces a text

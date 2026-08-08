@@ -135,11 +135,22 @@ export interface ToolCall {
   result_preview: string;
 }
 
+export interface Delegation {
+  agent: string;
+  question: string;
+  answer: string;
+  tools_used: string[];
+}
+
 export interface AgentAnswer {
+  /** explicit = you named the agent · routed = planner picked ONE ·
+   *  orchestrated = orchestrator combined SEVERAL */
+  mode?: string;
   agent: string;
   routing_reason?: string;
   answer: string;
   tool_calls: ToolCall[];
+  delegations?: Delegation[];
   iterations: number;
   stopped_early: boolean;
 }
@@ -302,9 +313,9 @@ export const api = {
   // ---- agents ----
   listAgents: () =>
     request<Record<string, { description: string; tools: string[] }>>("/agents"),
-  ask: (message: string, agent?: string) =>
+  ask: (message: string, agent?: string, mode: "auto" | "orchestrate" = "auto") =>
     request<AgentAnswer>("/agents/ask", {
       method: "POST",
-      body: JSON.stringify({ message, agent: agent || null }),
+      body: JSON.stringify({ message, agent: agent || null, mode }),
     }),
 };

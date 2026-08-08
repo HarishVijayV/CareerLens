@@ -43,6 +43,10 @@ export default function AssistantPage() {
   const [agents, setAgents] = useState<Record<string, { description: string; tools: string[] }>>({});
   const [loading, setLoading] = useState(false);
   const [showOverride, setShowOverride] = useState(false);
+  // Team mode = orchestration: several specialists, then a combined answer. Off by
+  // default because each delegation is a full nested LLM loop — richer, but multiple
+  // times the cost of routing to one agent.
+  const [teamMode, setTeamMode] = useState(false);
   const [expandedTools, setExpandedTools] = useState<number | null>(null);
 
   const endRef = useRef<HTMLDivElement>(null);
@@ -67,7 +71,7 @@ export default function AssistantPage() {
     setLoading(true);
 
     try {
-      const answer = await api.ask(text, agent || undefined);
+      const answer = await api.ask(text, agent || undefined, teamMode ? "orchestrate" : "auto");
       setTurns((t) => [...t, { role: "assistant", text: answer.answer, answer }]);
     } catch (e) {
       // Errors render as a turn in the conversation rather than a banner, so the history
@@ -179,6 +183,21 @@ export default function AssistantPage() {
                       {turn.text}
                     </p>
 
+                    {turn.answer?.delegations && turn.answer.delegations.length > 0 && (
+                      <div className="mb-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs dark:border-blue-900 dark:bg-blue-950/40">
+                        <div className="mb-1 font-medium text-blue-900 dark:text-blue-300">
+                          Delegated to {turn.answer.delegations.length} specialist
+                          {turn.answer.delegations.length === 1 ? "" : "s"}
+                        </div>
+                        {turn.answer.delegations.map((d, k) => (
+                          <div key={k} className="text-blue-800 dark:text-blue-400">
+                            {k + 1}. <strong>{d.agent}</strong> — &ldquo;{d.question.slice(0, 90)}
+                            {d.question.length > 90 ? "…" : ""}&rdquo;
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {turn.answer && turn.answer.tool_calls.length > 0 && (
                       <div className="mt-3 border-t border-zinc-200 pt-2 dark:border-zinc-700">
                         <button
@@ -242,7 +261,18 @@ export default function AssistantPage() {
               </button>
             </div>
 
-            <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+              <label className="flex cursor-pointer items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={teamMode}
+                  onChange={(e) => setTeamMode(e.target.checked)}
+                />
+                <span title="The orchestrator delegates to several specialists and combines their answers. Slower and costlier, but handles questions one agent can't.">
+                  Use the whole team <span className="text-zinc-400">(multi-agent)</span>
+                </span>
+              </label>
+
               {!showOverride ? (
                 <button onClick={() => setShowOverride(true)} className="underline decoration-dotted">
                   Force a specific agent

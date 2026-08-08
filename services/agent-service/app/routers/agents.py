@@ -2,7 +2,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from app.agents.definitions import AGENTS
-from app.agents.orchestrator import route_explicit, route_with_llm
+from app.agents.orchestrator import orchestrate, route_explicit, route_with_llm
 from app.langgraph_impl.graph import run_job_match_graph
 
 router = APIRouter(tags=["agents"])
@@ -23,7 +23,10 @@ def list_agents():
 
 class AskRequest(BaseModel):
     message: str
-    agent: str | None = None  # omit to let the LLM router pick
+    agent: str | None = None   # name one to skip routing entirely
+    # "auto"        -> a planner picks ONE specialist (cheap, predictable)
+    # "orchestrate" -> the orchestrator may call SEVERAL and synthesise (costlier, richer)
+    mode: str = "auto"
 
 
 @router.post("/agents/ask")
@@ -40,12 +43,15 @@ def ask(request: AskRequest, x_user_id: str | None = Header(default=None)):
         if request.agent:
             run = route_explicit(request.agent, message)
             return {
+                "mode": "explicit",
                 "agent": request.agent,
                 "answer": run.final_answer,
                 "tool_calls": run.tool_calls,
                 "iterations": run.iterations,
                 "stopped_early": run.stopped_early,
             }
+        if request.mode == "orchestrate":
+            return orchestrate(message)
         return route_with_llm(message)
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
