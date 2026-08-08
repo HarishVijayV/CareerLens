@@ -96,6 +96,13 @@ export function BarChart({
   height?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+
+  if (!data.length) {
+    return <p className="py-12 text-center text-xs text-zinc-500">No data yet.</p>;
+  }
+
+  // The `1` floor keeps this safe when every value is 0 — dividing by a zero max would
+  // make every bar width NaN.
   const max = Math.max(...data.map((d) => d.value), 1);
   const labelWidth = 108;
   const chartWidth = 460;
@@ -180,6 +187,12 @@ export function LineChart({
   const [hover, setHover] = useState<number | null>(null);
   const id = useId();
 
+  // Charts render before their fetch resolves, so an empty array is a NORMAL state, not
+  // an error — and it must be handled before any scale math runs.
+  if (!data.length) {
+    return <p className="py-12 text-center text-xs text-zinc-500">No data yet.</p>;
+  }
+
   const width = 560;
   const height = 200;
   const padding = { top: 16, right: 16, bottom: 28, left: 48 };
@@ -188,9 +201,17 @@ export function LineChart({
 
   const max = Math.max(...data.map((d) => d.value));
   const min = Math.min(...data.map((d) => d.value));
-  // pad the domain so the line never touches the frame edges
-  const domainMax = max + (max - min) * 0.15;
-  const domainMin = Math.max(0, min - (max - min) * 0.15);
+
+  // Pad the domain so the line never touches the frame edges.
+  //
+  // The `|| 1` guards a real failure: when every value is identical, max - min is 0, the
+  // domain collapses to zero width, and every y coordinate becomes NaN — React then warns
+  // "Received NaN for the y1 attribute" and the chart renders invisibly. The empty-data
+  // case is handled by the early return above, which is the other way this used to break
+  // (Math.max of an empty array is -Infinity).
+  const spread = max - min || Math.abs(max) * 0.2 || 1;
+  const domainMax = max + spread * 0.15;
+  const domainMin = Math.max(0, min - spread * 0.15);
 
   const x = (i: number) => padding.left + (i / Math.max(data.length - 1, 1)) * plotW;
   const y = (v: number) =>
