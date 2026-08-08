@@ -2,6 +2,7 @@ version: 2
 
 models:
   - name: stg_postings
+    description: Cleaned, renamed staging layer over raw.postings.
     columns:
       - name: posting_id
         tests: [not_null, unique]
@@ -13,25 +14,56 @@ models:
               values: ["junior", "mid", "senior", "unknown"]
 
   - name: dim_company
+    description: One row per distinct hiring company.
     columns:
       - name: company_id
         tests: [not_null, unique]
+      - name: company_name
+        tests: [not_null]
 
   - name: dim_skill
+    description: One row per distinct skill, with how many postings mention it.
     columns:
       - name: skill_id
         tests: [not_null, unique]
+      - name: skill_name
+        tests: [not_null, unique]
 
   - name: fact_job_posting
+    description: Central fact table — one row per posting, keyed out to the dimensions.
     columns:
       - name: posting_id
         tests: [not_null, unique]
+      - name: company_id
+        # Referential integrity: every company_id on the fact MUST exist in dim_company.
+        # A silently broken join is one of the most common warehouse bugs, and this is
+        # the test that catches it.
+        tests:
+          - relationships:
+              to: ref('dim_company')
+              field: company_id
       - name: salary
         tests:
-          - dbt_utils.accepted_range:
+          # our own generic test — see tests/generic/accepted_range.sql
+          - accepted_range:
               min_value: 0
               max_value: 2000000
+              # warn, not error: one weird salary in a noisy source shouldn't halt the
+              # whole pipeline — it should be visible and reviewed. Choosing severity
+              # deliberately is part of designing tests that people actually keep.
               config:
-                severity: warn  # a bad salary shouldn't fail the whole pipeline run —
-                # flagged for review instead, which is the realistic behavior for one
-                # noisy source among several.
+                severity: warn
+
+  - name: bridge_posting_skill
+    description: Many-to-many link between postings and skills.
+    columns:
+      - name: posting_id
+        tests:
+          - relationships:
+              to: ref('fact_job_posting')
+              field: posting_id
+      - name: skill_id
+        tests:
+          - relationships:
+              to: ref('dim_skill')
+              field: skill_id

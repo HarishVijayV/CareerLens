@@ -1,8 +1,10 @@
--- Postgres syntax (unnest) — this is the one model you'd rewrite for Snowflake, which
--- uses FLATTEN(input => column) instead of UNNEST. Worth knowing that dialect
--- differences are exactly this localized: one model, not a rewrite of the whole project.
-select distinct
-    md5(skill) as skill_id,
-    skill
-from {{ ref('stg_postings') }}, unnest(required_skills) as skill
+-- Reads the bridge table instead of unnesting an array column, so this SQL runs
+-- unchanged on Postgres AND Snowflake (array/flatten syntax differs between them;
+-- plain rows don't).
+select
+    md5(skill)  as skill_id,
+    skill       as skill_name,
+    count(*)    as posting_count
+from {{ source('raw', 'posting_skills') }}
 where skill is not null
+group by skill

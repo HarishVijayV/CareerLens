@@ -4,11 +4,24 @@ sources:
   - name: raw
     description: >
       Landing tables loaded by pipeline/ingestion/load_to_warehouse.py after the Spark
-      ETL step writes curated Parquet. dbt never reads Parquet directly — it transforms
-      whatever's already inside the warehouse, which is the actual division of labor
-      between Spark (heavy processing) and dbt (SQL modeling) described in
-      docs/DATA_ENGINEERING.md.
+      ETL writes curated Parquet. dbt never reads Parquet directly — it transforms
+      what's already in the warehouse. That's the division of labor between Spark (heavy
+      distributed processing) and dbt (SQL modeling + tests) from docs/DATA_ENGINEERING.md.
     schema: raw
     tables:
       - name: postings
-        description: One row per cleaned job posting, as produced by the Spark ETL job.
+        description: One row per cleaned, deduplicated job posting.
+      - name: posting_skills
+        description: >
+          Bridge table, one row per (posting_id, skill). Postings have many skills and
+          skills appear in many postings — a classic many-to-many, modeled as a bridge
+          table rather than an array column so the SQL stays portable across Postgres
+          and Snowflake.
+      - name: skill_demand
+        description: Pre-aggregated skill frequency, computed in Spark.
+      - name: salary_by_seniority
+        description: Pre-aggregated salary stats per seniority level.
+      - name: postings_by_month
+        description: Posting counts per month — shows hiring seasonality.
+      - name: salary_by_region
+        description: Pre-aggregated salary stats per region.

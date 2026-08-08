@@ -1,5 +1,0 @@
-# Run `dbt deps` once before the first `dbt run` to install this — it's what
-# `dbt_utils.accepted_range` in models/schema.yml resolves to.
-packages:
-  - package: dbt-labs/dbt_utils
-    version: [">=1.1.0", "<2.0.0"]
