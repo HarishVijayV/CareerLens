@@ -37,12 +37,43 @@ SessionLocal = sessionmaker(bind=engine)
 # Gmail search syntax. Narrowing here means we download tens of messages instead of
 # thousands, and the LLM only ever sees plausible candidates — the cheapest filter is the
 # one that runs before your code does.
+# Gmail search syntax. Two lessons are baked into this query:
+#
+# 1. Single generic words are useless. An earlier version matched subject:(application OR
+#    offer) and returned a Red Hat API-key notice, a Samsung sale, and a GitHub OAuth
+#    alert — every one a false positive. "application" and "offer" are simply common
+#    English words. Multi-word phrases carry the job context; single words don't.
+#
+# 2. The LLM classifier is a safety net, not a filter. It correctly rejected all that
+#    noise, but each rejection still cost an API call. Filtering precisely here is a cost
+#    control: the cheapest classification is the one you never make.
+#
+# ATS senders are the highest-signal indicator available — nobody receives Greenhouse or
+# Lever mail by accident.
+ATS_SENDERS = (
+    "greenhouse.io OR lever.co OR myworkday.com OR workday.com OR ashbyhq.com OR "
+    "smartrecruiters.com OR icims.com OR taleo.net OR successfactors.com OR "
+    "jobvite.com OR breezy.hr OR workable.com OR bamboohr.com OR hire.google.com"
+)
+
+# SUBJECT-only, and multi-word only. Two failed attempts got us here:
+#   v1  subject:(application OR offer)  -> 4 hits, all false (API keys, a Samsung sale)
+#   v2  v1 + the same phrases matched in the BODY -> 20 hits, MORE noise: any newsletter
+#       containing "unfortunately" or "your application" anywhere qualified
+# Body matching sounds more thorough and is strictly worse; a marketing email mentions
+# these words in passing, while a real ATS mail puts them in the SUBJECT.
+JOB_PHRASES = (
+    '"thank you for applying" OR "application received" OR "application status" OR '
+    '"we received your application" OR "your application" OR "interview invitation" OR '
+    '"schedule an interview" OR "interview request" OR "offer letter" OR '
+    '"application update" OR "regarding your application"'
+)
+
 GMAIL_QUERY = (
-    'newer_than:90d ('
-    'subject:(application OR interview OR "thank you for applying" OR candidate OR '
-    'recruit OR offer OR position OR role) '
-    'OR from:(greenhouse.io OR lever.co OR workday.com OR ashbyhq.com OR smartrecruiters.com)'
-    ')'
+    f"newer_than:180d ("
+    f"from:({ATS_SENDERS}) "
+    f"OR subject:({JOB_PHRASES})"
+    f")"
 )
 
 # Only these statuses represent a real application. The classifier is explicitly allowed
