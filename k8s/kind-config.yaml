@@ -1,0 +1,39 @@
+# kind = Kubernetes IN Docker. Each "node" is a container running a real Kubernetes node.
+#
+# Why kind before any cloud: it is the SAME Kubernetes API. Every manifest, every kubectl
+# command, every Helm chart here works unchanged on GKE, EKS, AKS or k3s. Learning on a
+# cloud cluster means debugging Kubernetes and cloud IAM at the same time, and you can't
+# tell which one is failing. Learn one thing at a time; move the working thing to cloud.
+#
+# Create:  kind create cluster --config k8s/kind-config.yaml
+# Delete:  kind delete cluster --name careerlens
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: careerlens
+
+nodes:
+  # One control-plane node, two workers. Multi-node is deliberate even though a single
+  # node would run everything: it makes the scheduler's job visible. You can watch pods
+  # land on different nodes, cordon one and see them reschedule, and see why anti-affinity
+  # or a PodDisruptionBudget matters — none of which is observable on a one-node cluster.
+  - role: control-plane
+    kubeadmConfigPatches:
+      # Label the node so the ingress controller's nodeSelector can find it.
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # Map host ports to the node so you can reach the cluster from a browser.
+      # Without this, a Service inside kind is unreachable from Windows — kind's nodes
+      # are containers on a private Docker network, and NodePort alone doesn't cross it.
+      - containerPort: 80
+        hostPort: 8080
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 8443
+        protocol: TCP
+
+  - role: worker
+  - role: worker

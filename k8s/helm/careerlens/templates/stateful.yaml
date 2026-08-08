@@ -1,0 +1,161 @@
+{{/*
+Postgres and Redis as StatefulSets, not Deployments.
+
+The difference matters here: a StatefulSet gives each pod a STABLE name (postgres-0) and
+keeps its PersistentVolumeClaim attached across restarts. A Deployment treats pods as
+interchangeable and would happily hand a restarted database a different volume — which
+for a database means silently losing data.
+
+Rule of thumb: stateless -> Deployment, stateful -> StatefulSet.
+
+In production you would disable both of these and use a MANAGED database instead
+(RDS / Cloud SQL / OCI Database). Running your own Postgres means owning backups,
+failover, upgrades and PITR — a full-time job that a managed service does better.
+These exist so the chart runs standalone on kind.
+*/}}
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-postgres
+  labels:
+    {{- include "careerlens.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: {{ .Release.Name }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "careerlens.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "careerlens.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom: { configMapKeyRef: { name: "{{ .Release.Name }}-config", key: POSTGRES_USER } }
+            - name: POSTGRES_DB
+              valueFrom: { configMapKeyRef: { name: "{{ .Release.Name }}-config", key: POSTGRES_DB } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.existingSecret }}, key: POSTGRES_PASSWORD } }
+            # Postgres refuses to initialise into a non-empty directory, and a mounted
+            # volume already contains lost+found. Pointing PGDATA at a subdirectory is
+            # the standard fix — without it the pod crash-loops on first start.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            # pg_isready, not a TCP check: the port accepts connections well before the
+            # database is actually able to answer queries.
+            exec: { command: ["pg_isready", "-U", "{{ .Values.config.postgresUser }}"] }
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "{{ .Values.config.postgresUser }}"] }
+            periodSeconds: 20
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+
+  # volumeClaimTemplates, not a plain volume: this provisions a PVC per pod and keeps it
+  # when the pod is rescheduled. Deleting the StatefulSet does NOT delete the PVC — data
+  # survives, deliberately.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-postgres
+  labels:
+    {{- include "careerlens.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  ports:
+    - port: 5432
+      name: postgres
+  selector:
+    {{- include "careerlens.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+{{- end }}
+
+{{- if .Values.redis.enabled }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-redis
+  labels:
+    {{- include "careerlens.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  serviceName: {{ .Release.Name }}-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "careerlens.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "careerlens.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["redis-cli", "ping"] }
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: {{ .Values.redis.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-redis
+  labels:
+    {{- include "careerlens.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  ports:
+    - port: 6379
+      name: redis
+  selector:
+    {{- include "careerlens.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+{{- end }}

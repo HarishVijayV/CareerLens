@@ -1,0 +1,68 @@
+{{- if .Values.ingress.enabled }}
+{{/*
+Ingress = the cluster's front door. One public entry point that routes by path to
+internal ClusterIP Services — the same shape as the API gateway inside the app, one layer
+up.
+
+Why not just expose each Service publicly? Because then every service needs its own
+address, its own TLS certificate, and its own CORS story. An Ingress terminates TLS once
+and routes by hostname/path, which is exactly what a cloud load balancer does — and on
+GKE/EKS/AKS this same resource PROVISIONS a real cloud load balancer automatically.
+
+Path order matters: /api and /mcp are more specific than /, so they must not be shadowed
+by the catch-all. nginx sorts by descending prefix length, so this is safe as written —
+but it's worth knowing rather than assuming.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "careerlens.labels" . | nindent 4 }}
+  annotations:
+    # The gateway already strips/normalises paths, so pass them through untouched.
+    nginx.ingress.kubernetes.io/use-regex: "false"
+    # Resume PDFs and .tex uploads exceed nginx's 1MB default, which would otherwise
+    # fail as a 413 that looks like an application bug.
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # LLM agent calls can take a while; the 60s default would cut off a long tool loop.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Release.Name }}-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          # API traffic -> gateway, which is the only service allowed to verify JWTs.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-gateway
+                port:
+                  number: {{ .Values.services.gateway.port }}
+          {{- if (index .Values.services "mcp-server").enabled }}
+          # MCP is exposed separately so external AI clients never traverse the gateway
+          # or touch anything personal — same boundary as the isolated compose network.
+          - path: /mcp
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-mcp-server
+                port:
+                  number: {{ (index .Values.services "mcp-server").port }}
+          {{- end }}
+          # Everything else -> the Next.js frontend.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-frontend
+                port:
+                  number: {{ .Values.services.frontend.port }}
+{{- end }}

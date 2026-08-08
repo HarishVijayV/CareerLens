@@ -1,0 +1,139 @@
+# Default values. Override per environment with -f values-prod.yaml or --set.
+#
+# This file IS the environment contract: everything that differs between your laptop and
+# a cloud cluster lives here, and nothing that differs lives in the templates. That's the
+# whole reason for using Helm rather than raw manifests — one chart, many environments.
+
+global:
+  # Where images are pulled from. GHCR by default because CI pushes there.
+  imageRegistry: ghcr.io/harishvijayv/careerlens
+  imageTag: latest
+  # kind loads images directly into nodes (`kind load docker-image`), so it must NOT try
+  # to pull from a registry — a local build has no registry copy. Set to Always in cloud.
+  imagePullPolicy: IfNotPresent
+
+# ---------------------------------------------------------------- application services
+services:
+  gateway:
+    enabled: true
+    replicas: 2          # >1 so a rolling update never drops all instances at once
+    port: 8000
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+
+  auth-service:
+    enabled: true
+    replicas: 2
+    port: 8000
+    resources:
+      requests: { cpu: 50m, memory: 192Mi }
+      limits:   { cpu: 500m, memory: 768Mi }   # texlive needs headroom to compile PDFs
+
+  jobs-service:
+    enabled: true
+    replicas: 2
+    port: 8000
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+
+  agent-service:
+    enabled: true
+    replicas: 1          # mostly waiting on LLM I/O; scaling out buys little
+    port: 8000
+    resources:
+      requests: { cpu: 50m, memory: 192Mi }
+      limits:   { cpu: 500m, memory: 768Mi }
+
+  notification-service:
+    enabled: true
+    replicas: 1
+    port: 8000
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits:   { cpu: 200m, memory: 256Mi }
+
+  mcp-server:
+    enabled: true
+    replicas: 1
+    port: 8005
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits:   { cpu: 200m, memory: 256Mi }
+
+  frontend:
+    enabled: true
+    replicas: 2
+    port: 3000
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+
+# Celery worker: no Service and no probes, because nothing connects TO it — it pulls jobs
+# from Redis. A readiness probe would be meaningless; there's no traffic to gate.
+worker:
+  enabled: true
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 192Mi }
+    limits:   { cpu: 1000m, memory: 1Gi }
+
+# ---------------------------------------------------------------- stateful dependencies
+# Run in-cluster for local/dev. In cloud, disable these and point at managed services
+# (RDS / Cloud SQL / OCI Database) — a database you operate yourself is a second job.
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  storage: 5Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 1000m, memory: 1Gi }
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  storage: 1Gi
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits:   { cpu: 200m, memory: 256Mi }
+
+# ---------------------------------------------------------------- ingress
+ingress:
+  enabled: true
+  className: nginx
+  host: careerlens.local
+  # Routes are ordered longest-prefix-first by the controller, so /api reaching the
+  # gateway and everything else reaching the frontend is unambiguous.
+  tls:
+    enabled: false      # enable with cert-manager once a real domain exists
+
+# ---------------------------------------------------------------- autoscaling
+autoscaling:
+  enabled: false        # needs metrics-server; enable after installing it
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+# ---------------------------------------------------------------- config
+config:
+  postgresUser: careerlens
+  postgresDb: careerlens
+  llmProvider: fireworks
+  fireworksModel: accounts/fireworks/models/deepseek-v4-flash
+  frontendOrigin: http://careerlens.local
+  publicApiBaseUrl: http://careerlens.local/api
+  accessTokenExpireMinutes: "15"
+  refreshTokenExpireDays: "7"
+
+# SECRETS ARE NOT STORED HERE. This file is committed; secrets are created out of band:
+#
+#   kubectl create secret generic careerlens-secrets \
+#     --from-literal=POSTGRES_PASSWORD=... \
+#     --from-literal=JWT_SECRET_KEY=... \
+#     --from-literal=FIREWORKS_API_KEY=...
+#
+# In cloud, replace that with External Secrets Operator or Sealed Secrets so nothing
+# sensitive ever exists in a repo. Note a Kubernetes Secret is only base64-ENCODED, not
+# encrypted — encryption at rest is a cluster setting you must turn on separately.
+existingSecret: careerlens-secrets

@@ -1,0 +1,54 @@
+{{- if .Values.autoscaling.enabled }}
+{{/*
+Horizontal Pod Autoscaler — add pods when CPU rises, remove them when it falls.
+
+Requires metrics-server, which kind does NOT ship with:
+    kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+    kubectl patch -n kube-system deployment metrics-server --type=json \
+      -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+(the patch is needed because kind's kubelet serving certs aren't signed by the cluster CA)
+
+The HPA computes desired replicas from RESOURCE REQUESTS, not limits — which is why the
+requests in values.yaml matter beyond scheduling. Set a request too high and utilisation
+always looks low, so it never scales up; too low and it scales up constantly.
+
+Only the gateway and frontend scale here: they're stateless and take the user-facing
+load. The agent service is bound by LLM latency, not CPU, so more replicas wouldn't make
+it faster — and the worker scales on QUEUE DEPTH, which CPU can't see (that needs KEDA).
+Knowing which metric actually drives a service is the real skill; CPU is just the default.
+*/}}
+{{- range $name := list "gateway" "frontend" }}
+{{- $svc := index $.Values.services $name }}
+{{- if $svc.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  labels:
+    {{- include "careerlens.labels" $ | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $.Release.Name }}-{{ $name }}
+  minReplicas: {{ $.Values.autoscaling.minReplicas }}
+  maxReplicas: {{ $.Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $.Values.autoscaling.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      # Wait 5 minutes of sustained low load before removing pods. Without this the HPA
+      # thrashes — scaling down on a brief lull, then straight back up — and each cycle
+      # costs pod startup time exactly when traffic is returning.
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 30   # scale UP fast; being slow here means dropped requests
+{{- end }}
+{{- end }}
+{{- end }}

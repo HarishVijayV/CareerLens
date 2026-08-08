@@ -1,0 +1,15 @@
+apiVersion: v2
+name: careerlens
+description: Job-market data pipeline and multi-agent AI copilot
+type: application
+
+# version    = the CHART's version (bump when templates change)
+# appVersion = the APPLICATION's version (the image tag being deployed)
+# Keeping them separate is the point: you can fix a template bug without pretending the
+# app changed, and vice versa.
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords: [data-engineering, kubernetes, fastapi, nextjs, ai-agents]
+maintainers:
+  - name: Harish Vijay V

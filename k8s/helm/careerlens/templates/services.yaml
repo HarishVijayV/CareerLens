@@ -1,0 +1,130 @@
+{{/*
+One template generating a Deployment + Service for every entry in .Values.services.
+
+Written as a loop rather than seven near-identical files on purpose: seven copies means a
+fix applied six times and forgotten once, and that seventh service is the one that breaks
+at 2am. The differences between these services are DATA (name, port, replicas,
+resources), so they belong in values.yaml, not in duplicated YAML.
+*/}}
+{{- range $name, $svc := .Values.services }}
+{{- if $svc.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  labels:
+    {{- include "careerlens.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  replicas: {{ $svc.replicas }}
+
+  strategy:
+    # RollingUpdate with maxUnavailable 0 = never take capacity DOWN to deploy. New pods
+    # must become Ready before old ones are removed, so a deploy causes no downtime and a
+    # broken image simply fails to roll out rather than taking the service offline.
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      {{- include "careerlens.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $name }}
+
+  template:
+    metadata:
+      labels:
+        {{- include "careerlens.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $name }}
+      annotations:
+        # Roll pods automatically when config changes. Without this a `helm upgrade` that
+        # only edits the ConfigMap changes nothing on running pods — they keep the old
+        # env vars until something unrelated restarts them, which is a genuinely
+        # confusing "I changed it and nothing happened".
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+    spec:
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.global.imageRegistry }}/{{ $name }}:{{ $.Values.global.imageTag }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: {{ $svc.port }}
+
+          envFrom:
+            - configMapRef:
+                name: {{ $.Release.Name }}-config
+            - secretRef:
+                name: {{ $.Values.existingSecret }}
+
+          env:
+            # Assembled here rather than in the ConfigMap because it interpolates a value
+            # that lives in the Secret, and a ConfigMap must never contain the password.
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+            {{- if eq $name "frontend" }}
+            - name: NEXT_PUBLIC_API_BASE_URL
+              value: {{ $.Values.config.publicApiBaseUrl | quote }}
+            {{- end }}
+
+          {{- if ne $name "mcp-server" }}
+          # THREE probes, each answering a different question. Conflating them is the
+          # classic Kubernetes mistake:
+          #
+          #  startup   — "has it finished booting?" Gates the other two, so a slow start
+          #              isn't mistaken for a failure and killed in a restart loop.
+          #  readiness — "should it receive traffic RIGHT NOW?" Failing removes the pod
+          #              from the Service endpoints but does NOT restart it. Correct for
+          #              a temporary dependency blip.
+          #  liveness  — "is it wedged and unrecoverable?" Failing RESTARTS the pod. This
+          #              is the self-healing you asked about — and why liveness must be
+          #              lenient: an aggressive one restarts healthy-but-slow pods and
+          #              turns a load spike into an outage.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+            failureThreshold: 30        # up to 150s to boot before we give up
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            failureThreshold: 3         # ~60s wedged before a restart
+          {{- end }}
+
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+
+          securityContext:
+            # Defence in depth: a container that can't write to its own filesystem or
+            # gain privileges is a far less useful foothold if the app is compromised.
+            allowPrivilegeEscalation: false
+            runAsNonRoot: false          # images currently run as root; see docs/ROADMAP
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  labels:
+    {{- include "careerlens.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+spec:
+  # ClusterIP = reachable only inside the cluster. Only the Ingress is public, which is
+  # the same "one public entrypoint" shape the API gateway already enforces in the app.
+  type: ClusterIP
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: http
+      name: http
+  selector:
+    {{- include "careerlens.selectorLabels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+{{- end }}
+{{- end }}

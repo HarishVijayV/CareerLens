@@ -1,0 +1,54 @@
+{{- if .Values.worker.enabled }}
+{{/*
+The Celery worker. A Deployment with no Service and no probes, deliberately.
+
+No Service: nothing connects TO a worker. It PULLS jobs from Redis, so there is no port
+to expose and no traffic to route.
+
+No readiness probe: readiness controls whether a Service sends traffic to a pod. With no
+Service, there is nothing for it to gate — adding one would be cargo-culting.
+
+Self-healing still applies: if the process exits, the Deployment's restartPolicy brings
+it back. That's the layer below liveness probes, and it's why a crashed worker recovers
+without anyone watching.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-worker
+  labels:
+    {{- include "careerlens.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      {{- include "careerlens.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "careerlens.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      # Give an in-flight job time to finish instead of killing it mid-email-sync.
+      # Celery stops accepting new tasks on SIGTERM and drains; 60s covers a sync.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: "{{ .Values.global.imageRegistry }}/worker-service:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          env:
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)"
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+{{- end }}
