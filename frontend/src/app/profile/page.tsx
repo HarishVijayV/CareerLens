@@ -61,21 +61,21 @@ export default function ProfilePage() {
   }
 
   const input =
-    "w-full rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800";
+    "w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-[15px] dark:border-zinc-700 dark:bg-zinc-800";
   const labelCls = "flex flex-col gap-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300";
   const hint = "text-xs font-normal text-zinc-500";
 
   return (
     <AppShell>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold">Your Profile</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h1 className="text-2xl font-semibold">Your Profile</h1>
+        <p className="mt-1 text-base text-zinc-500">
           This drives everything: which jobs get fetched from the job boards, how postings are
           ranked for you, and what the AI agents know when they tailor your resume.
         </p>
       </div>
 
-      <form onSubmit={handleSave} className="max-w-3xl space-y-5">
+      <form onSubmit={handleSave} className="max-w-4xl space-y-5">
         <div className="grid gap-5 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 sm:grid-cols-2">
           <label className={labelCls}>
             Full name
@@ -197,7 +197,7 @@ export default function ProfilePage() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded bg-zinc-900 px-5 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+            className="rounded-lg bg-zinc-900 px-6 py-2.5 text-base font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
           >
             {saving ? "Saving…" : "Save profile"}
           </button>

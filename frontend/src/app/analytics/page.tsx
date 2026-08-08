@@ -42,8 +42,8 @@ export default function AnalyticsPage() {
   return (
     <AppShell>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold">Job Market Analytics</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h1 className="text-2xl font-semibold">Job Market Analytics</h1>
+        <p className="mt-1 text-base text-zinc-500">
           Every number here is computed by the data pipeline — Spark cleans and aggregates,
           dbt models it into a star schema, and these charts read the result.
         </p>
@@ -59,7 +59,7 @@ export default function AnalyticsPage() {
             <strong>ML</strong> — pay bands on the Jobs page: Spark MLlib, batch-scored
           </span>
           <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-            <strong>LLM</strong> — only the AI Copilot &amp; Resume assistant
+            <strong>LLM</strong> — only the Assistant &amp; Resume assistant
           </span>
         </div>
         <p className="mt-2 text-xs text-zinc-400">

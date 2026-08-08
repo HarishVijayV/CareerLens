@@ -110,8 +110,8 @@ export default function ApplicationsPage() {
     <AppShell>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Applications</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h1 className="text-2xl font-semibold">Applications</h1>
+          <p className="mt-1 text-base text-zinc-500">
             Connect Gmail and an AI agent reads your inbox, classifies each message, and
             builds this funnel automatically.
           </p>
@@ -161,44 +161,44 @@ export default function ApplicationsPage() {
           onSubmit={addApplication}
           className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
         >
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-sm text-zinc-500">
             Company *
             <input
               required
               value={form.company}
               onChange={(e) => setForm({ ...form, company: e.target.value })}
               placeholder="Acme Corp"
-              className="w-44 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              className="w-44 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-sm text-zinc-500">
             Role
             <input
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
               placeholder="Data Engineer"
-              className="w-44 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              className="w-44 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-sm text-zinc-500">
             Status
             <select
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value })}
-              className="w-40 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              className="w-40 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
             >
               {Object.entries(STATUS_LABEL).map(([v, l]) => (
                 <option key={v} value={v}>{l}</option>
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          <label className="flex flex-col gap-1 text-sm text-zinc-500">
             Resume sent
             <span className="text-[10px] text-zinc-400">optional — lets you compare reply rates</span>
             <select
               value={form.resume_version}
               onChange={(e) => setForm({ ...form, resume_version: e.target.value })}
-              className="w-48 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              className="w-48 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
             >
               <option value="">Not tracked</option>
               {resumeVersions.map((v) => (
@@ -283,15 +283,15 @@ export default function ApplicationsPage() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full text-left text-sm">
+        <table className="w-full text-left text-[15px]">
           <thead className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
             <tr>
-              <th className="px-4 py-2 font-medium">Company</th>
-              <th className="px-4 py-2 font-medium">Role</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium">Resume</th>
-              <th className="px-4 py-2 font-medium">Source</th>
-              <th className="px-4 py-2 font-medium">Updated</th>
+              <th className="px-4 py-2.5 font-medium">Company</th>
+              <th className="px-4 py-2.5 font-medium">Role</th>
+              <th className="px-4 py-2.5 font-medium">Status</th>
+              <th className="px-4 py-2.5 font-medium">Resume</th>
+              <th className="px-4 py-2.5 font-medium">Source</th>
+              <th className="px-4 py-2.5 font-medium">Updated</th>
             </tr>
           </thead>
           <tbody>
@@ -300,8 +300,8 @@ export default function ApplicationsPage() {
                 key={app.id}
                 className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/60"
               >
-                <td className="px-4 py-2 font-medium text-zinc-900 dark:text-zinc-100">{app.company}</td>
-                <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">{app.role ?? "—"}</td>
+                <td className="px-4 py-2.5 font-medium text-zinc-900 dark:text-zinc-100">{app.company}</td>
+                <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400">{app.role ?? "—"}</td>
                 <td className="px-4 py-2">
                   {/* Editable inline: moving an application forward is the single most
                       common action on this page, so it shouldn't need a detail view. */}
@@ -315,11 +315,11 @@ export default function ApplicationsPage() {
                     ))}
                   </select>
                 </td>
-                <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
+                <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400">
                   {app.resume_version ?? "—"}
                 </td>
-                <td className="px-4 py-2 text-zinc-500">{app.source}</td>
-                <td className="px-4 py-2 text-zinc-500">
+                <td className="px-4 py-2.5 text-zinc-500">{app.source}</td>
+                <td className="px-4 py-2.5 text-zinc-500">
                   {new Date(app.updated_at).toLocaleDateString()}
                 </td>
               </tr>

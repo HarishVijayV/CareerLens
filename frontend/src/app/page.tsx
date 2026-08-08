@@ -28,7 +28,7 @@ const FEATURES = [
     body: "Which skills are in demand, which actually pay above average, how salaries move by seniority and region, and when hiring peaks.",
   },
   {
-    title: "AI copilot that shows its work",
+    title: "An assistant that shows its work",
     body: "Ask in plain English. A planner routes to a specialist agent, which calls real tools against your data — and every call it made is displayed.",
   },
   {

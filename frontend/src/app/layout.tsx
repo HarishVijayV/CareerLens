@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "CareerLens",
-  description: "Job-market data pipeline + multi-agent AI copilot",
+  description: "Job-market data pipeline with a multi-agent AI assistant",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

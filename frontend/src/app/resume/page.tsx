@@ -170,8 +170,8 @@ export default function ResumePage() {
     <AppShell>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Resume</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h1 className="text-2xl font-semibold">Resume</h1>
+          <p className="mt-1 text-base text-zinc-500">
             Upload it, edit it, or ask the assistant to rewrite it. Every save is a new
             version — nothing is overwritten.
           </p>
@@ -398,7 +398,7 @@ export default function ResumePage() {
             </section>
 
             <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="mb-1 text-sm font-semibold">Versions</h2>
+              <h2 className="mb-1 text-base font-semibold">Versions</h2>
               <p className="mb-3 text-[11px] text-zinc-500">Click any version to restore it.</p>
               <ul className="max-h-52 space-y-1.5 overflow-y-auto">
                 {versions.map((v) => (

@@ -39,8 +39,8 @@ export function ChartFrame({
     <section className="viz-root rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       <header className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-zinc-500">{subtitle}</p>}
+          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
+          {subtitle && <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>}
         </div>
         {rows && columns && (
           <button
@@ -54,11 +54,11 @@ export function ChartFrame({
 
       {showTable && rows && columns ? (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs tabular-nums">
+          <table className="w-full text-left text-sm tabular-nums">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800">
                 {columns.map((c) => (
-                  <th key={c} className="py-1.5 pr-4 font-medium text-zinc-500">
+                  <th key={c} className="py-2 pr-4 font-medium text-zinc-500">
                     {c}
                   </th>
                 ))}
@@ -68,7 +68,7 @@ export function ChartFrame({
               {rows.map((r, i) => (
                 <tr key={i} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/60">
                   {r.map((cell, j) => (
-                    <td key={j} className="py-1.5 pr-4 text-zinc-700 dark:text-zinc-300">
+                    <td key={j} className="py-2 pr-4 text-zinc-700 dark:text-zinc-300">
                       {cell ?? "—"}
                     </td>
                   ))}
@@ -153,7 +153,7 @@ export function BarChart({
                 textAnchor="end"
                 dominantBaseline="central"
                 className="fill-zinc-600 dark:fill-zinc-400"
-                style={{ fontSize: 11 }}
+                style={{ fontSize: 12.5 }}
               >
                 {d.label}
               </text>
@@ -163,7 +163,7 @@ export function BarChart({
                 y={y + height / 2}
                 dominantBaseline="central"
                 className="fill-zinc-500"
-                style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }}
+                style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}
               >
                 {format(d.value)}
               </text>
@@ -320,9 +320,9 @@ export function StatTile({
 }) {
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="text-xs font-medium text-zinc-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</div>
-      {hint && <div className="mt-0.5 text-xs text-zinc-400">{hint}</div>}
+      <div className="text-sm font-medium text-zinc-500">{label}</div>
+      <div className="mt-1 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</div>
+      {hint && <div className="mt-1 text-xs text-zinc-400">{hint}</div>}
     </div>
   );
 }

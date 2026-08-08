@@ -44,11 +44,11 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold">
+        <h1 className="text-2xl font-semibold">
           {profile?.full_name ? `Welcome back, ${profile.full_name.split(" ")[0]}` : "Dashboard"}
         </h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Job-market data pipeline + multi-agent AI copilot.
+        <p className="mt-1 text-base text-zinc-500">
+          Job-market data pipeline with a multi-agent AI assistant.
         </p>
       </div>
 
@@ -77,7 +77,7 @@ export default function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Jobs for you</h2>
+            <h2 className="text-base font-semibold">Jobs for you</h2>
             <Link href="/jobs" className="text-xs text-zinc-500 underline">
               See all
             </Link>
@@ -109,7 +109,7 @@ export default function DashboardPage() {
         </section>
 
         <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-3 text-sm font-semibold">What you can do here</h2>
+          <h2 className="mb-3 text-base font-semibold">What you can do here</h2>
           <ul className="space-y-3 text-sm">
             <li>
               <Link href="/analytics" className="font-medium underline">
@@ -122,7 +122,7 @@ export default function DashboardPage() {
             </li>
             <li>
               <Link href="/copilot" className="font-medium underline">
-                AI Copilot
+                Assistant
               </Link>
               <p className="text-xs text-zinc-500">
                 Ask questions in plain English. Agents call real tools against your data and

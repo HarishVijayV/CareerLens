@@ -64,8 +64,8 @@ export default function JobsPage() {
   return (
     <AppShell>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold">Jobs</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h1 className="text-2xl font-semibold">Jobs</h1>
+        <p className="mt-1 text-base text-zinc-500">
           Searching the curated warehouse — {total.toLocaleString()} postings match.
         </p>
       </div>
@@ -78,21 +78,21 @@ export default function JobsPage() {
         }}
         className="mb-5 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
       >
-        <label className="flex flex-col gap-1 text-xs text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-zinc-500">
           Title
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="e.g. Data Engineer"
-            className="w-44 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-44 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-zinc-500">
           Skill
           <select
             value={skill}
             onChange={(e) => setSkill(e.target.value)}
-            className="w-36 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-36 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
           >
             <option value="">Any skill</option>
             {filters.skills.map((s) => (
@@ -101,12 +101,12 @@ export default function JobsPage() {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-zinc-500">
           Region
           <select
             value={region}
             onChange={(e) => setRegion(e.target.value)}
-            className="w-36 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-36 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
           >
             <option value="">Any region</option>
             {filters.regions.map((r) => (
@@ -115,12 +115,12 @@ export default function JobsPage() {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-zinc-500">
           Pay vs market
           <select
             value={payBand}
             onChange={(e) => setPayBand(e.target.value)}
-            className="w-36 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-36 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
           >
             <option value="">Any</option>
             <option value="above_market">Above market</option>
@@ -128,12 +128,12 @@ export default function JobsPage() {
             <option value="below_market">Below market</option>
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-zinc-500">
           Seniority
           <select
             value={seniority}
             onChange={(e) => setSeniority(e.target.value)}
-            className="w-28 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-28 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
           >
             <option value="">Any</option>
             {filters.seniorities.map((s) => (
@@ -141,14 +141,14 @@ export default function JobsPage() {
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-zinc-500">
           Min salary
           <input
             type="number"
             value={minSalary}
             onChange={(e) => setMinSalary(e.target.value)}
             placeholder="100000"
-            className="w-28 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-28 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
           />
         </label>
         <label className="flex items-center gap-2 pb-1.5 text-sm text-zinc-600 dark:text-zinc-400">
@@ -175,15 +175,15 @@ export default function JobsPage() {
       )}
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full text-left text-sm">
+        <table className="w-full text-left text-[15px]">
           <thead className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
             <tr>
-              <th className="px-4 py-2 font-medium">Title</th>
-              <th className="px-4 py-2 font-medium">Company</th>
-              <th className="px-4 py-2 font-medium">Location</th>
-              <th className="px-4 py-2 font-medium">Level</th>
-              <th className="px-4 py-2 text-right font-medium">Salary</th>
-              <th className="px-4 py-2 font-medium" title="Spark MLlib prediction vs the advertised salary">
+              <th className="px-4 py-2.5 font-medium">Title</th>
+              <th className="px-4 py-2.5 font-medium">Company</th>
+              <th className="px-4 py-2.5 font-medium">Location</th>
+              <th className="px-4 py-2.5 font-medium">Level</th>
+              <th className="px-4 py-2.5 text-right font-medium">Salary</th>
+              <th className="px-4 py-2.5 font-medium" title="Spark MLlib prediction vs the advertised salary">
                 vs market
               </th>
             </tr>
@@ -194,7 +194,7 @@ export default function JobsPage() {
                 key={job.posting_id}
                 className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
               >
-                <td className="px-4 py-2 font-medium text-zinc-900 dark:text-zinc-100">
+                <td className="px-4 py-2.5 font-medium text-zinc-900 dark:text-zinc-100">
                   {job.title}
                   {job.remote && (
                     <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
@@ -202,10 +202,10 @@ export default function JobsPage() {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">{job.company_name ?? "—"}</td>
-                <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">{job.location ?? "—"}</td>
-                <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">{job.seniority ?? "—"}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400">{job.company_name ?? "—"}</td>
+                <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400">{job.location ?? "—"}</td>
+                <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400">{job.seniority ?? "—"}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {money(job.salary)}
                 </td>
                 <td className="px-4 py-2">

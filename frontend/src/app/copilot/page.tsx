@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { AgentAnswer, api } from "@/lib/api";
+import { AgentAnswer, api, ApiError } from "@/lib/api";
 
 const EXAMPLES = [
   "Which skills pay the most above average?",
@@ -12,7 +12,7 @@ const EXAMPLES = [
 ];
 
 /** One concrete question per agent, so the sidebar shows what each is FOR rather than
- *  just what it's called. Clicking one also proves the planner routes it correctly. */
+ *  just what it's called. Clicking one also demonstrates the planner routing correctly. */
 const AGENT_EXAMPLES: Record<string, string> = {
   job_matcher: "What jobs match my skills, and what am I missing?",
   resume_tailor: "Rewrite my resume bullets to emphasise data engineering",
@@ -21,188 +21,278 @@ const AGENT_EXAMPLES: Record<string, string> = {
   email_classifier: "Classify this email: Subject: Thank you for applying to Acme",
 };
 
+interface Turn {
+  role: "user" | "assistant";
+  text: string;
+  answer?: AgentAnswer; // assistant turns carry the full trace
+  error?: boolean;
+}
+
 /**
  * Shows the agent's TOOL CALLS alongside its answer, on purpose.
  *
  * Anyone can put a chat box in front of an LLM. Displaying which tools ran, with which
  * arguments, and what came back is the difference between "a chatbot" and "an agent that
- * actually queried my data" — and it's what makes the answer verifiable rather than
- * something you have to take on faith.
+ * actually queried my data" — it makes the answer verifiable rather than something you
+ * have to take on faith.
  */
-export default function CopilotPage() {
+export default function AssistantPage() {
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [message, setMessage] = useState("");
   const [agent, setAgent] = useState("");
   const [agents, setAgents] = useState<Record<string, { description: string; tools: string[] }>>({});
-  const [result, setResult] = useState<AgentAnswer | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Manual agent selection is a DEBUG override, not the normal path — hidden by default.
-  // A prominent dropdown made it look like the user was meant to route manually, which
-  // defeats the point of having a planner at all.
   const [showOverride, setShowOverride] = useState(false);
+  const [expandedTools, setExpandedTools] = useState<number | null>(null);
+
+  const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.listAgents().then(setAgents).catch(() => {});
   }, []);
 
+  // Keep the newest turn in view as the conversation grows.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [turns, loading]);
+
   async function submit(text: string) {
-    if (!text.trim()) return;
+    if (!text.trim() || loading) return;
+
+    // APPEND, don't replace. The previous version wiped the screen on every question,
+    // which threw away context the user was still reading and made it impossible to
+    // compare a follow-up answer against the one before it.
+    setTurns((t) => [...t, { role: "user", text }]);
+    setMessage("");
     setLoading(true);
-    setError(null);
-    setResult(null);
+
     try {
-      setResult(await api.ask(text, agent || undefined));
+      const answer = await api.ask(text, agent || undefined);
+      setTurns((t) => [...t, { role: "assistant", text: answer.answer, answer }]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Agent call failed");
+      // Errors render as a turn in the conversation rather than a banner, so the history
+      // stays intact and you can see which question failed.
+      setTurns((t) => [
+        ...t,
+        {
+          role: "assistant",
+          text: e instanceof ApiError ? e.message : "The assistant call failed.",
+          error: true,
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   }
 
+  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter sends, Shift+Enter newlines — the convention every chat UI uses. Without it
+    // the textarea just inserted a newline and nothing was sent, which reads as broken.
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      submit(message);
+    }
+  }
+
   return (
     <AppShell>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold">AI Copilot</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Ask in plain English. A planner picks the right specialist agent, which calls real
-          tools against your data — you can see every call it made below its answer.
-        </p>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Assistant</h1>
+          <p className="mt-1 text-base text-zinc-500">
+            Ask in plain English. A planner picks the right specialist agent, which calls real
+            tools against your data — every call is shown with its answer.
+          </p>
+        </div>
+        {turns.length > 0 && (
+          <button
+            onClick={() => setTurns([])}
+            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          >
+            Clear conversation
+          </button>
+        )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit(message);
-            }}
-            className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
-          >
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={3}
-              placeholder="Ask anything about jobs, the market, or your resume…"
-              className="w-full resize-y rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-            />
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
-              >
-                {loading ? "Thinking…" : "Ask"}
-              </button>
-
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                {!showOverride ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowOverride(true)}
-                    className="underline decoration-dotted"
-                  >
-                    Force a specific agent
-                  </button>
-                ) : (
-                  <>
-                    <select
-                      value={agent}
-                      onChange={(e) => setAgent(e.target.value)}
-                      className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800"
-                    >
-                      <option value="">Auto (planner decides)</option>
-                      {Object.keys(agents).map((name) => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </select>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        {/* ---------------- conversation ---------------- */}
+        <div className="flex h-[calc(100vh-250px)] min-h-[540px] flex-col rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex-1 space-y-4 overflow-y-auto p-6">
+            {turns.length === 0 && (
+              <div className="py-12 text-center">
+                <p className="text-lg font-medium">What would you like to know?</p>
+                <p className="mt-1.5 text-sm text-zinc-500">
+                  The planner decides which agent handles it — you don&apos;t have to choose.
+                </p>
+                <div className="mx-auto mt-6 flex max-w-2xl flex-wrap justify-center gap-2">
+                  {EXAMPLES.map((ex) => (
                     <button
-                      type="button"
-                      onClick={() => { setAgent(""); setShowOverride(false); }}
-                      className="underline decoration-dotted"
+                      key={ex}
+                      onClick={() => submit(ex)}
+                      className="rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
                     >
-                      hide
+                      {ex}
                     </button>
-                  </>
-                )}
+                  ))}
+                </div>
               </div>
-            </div>
-          </form>
+            )}
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {EXAMPLES.map((ex) => (
-              <button
-                key={ex}
-                onClick={() => {
-                  setMessage(ex);
-                  submit(ex);
-                }}
-                className="rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              >
-                {ex}
-              </button>
-            ))}
+            {turns.map((turn, i) =>
+              turn.role === "user" ? (
+                <div key={i} className="flex justify-end">
+                  <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-zinc-900 px-4 py-3 text-base text-white dark:bg-white dark:text-zinc-900">
+                    {turn.text}
+                  </div>
+                </div>
+              ) : (
+                <div key={i} className="flex justify-start">
+                  <div
+                    className={`max-w-[88%] rounded-2xl rounded-bl-sm border px-4 py-3 ${
+                      turn.error
+                        ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
+                        : "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50"
+                    }`}
+                  >
+                    {turn.answer && (
+                      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded bg-zinc-900 px-2 py-0.5 text-white dark:bg-white dark:text-zinc-900">
+                          {turn.answer.agent}
+                        </span>
+                        {turn.answer.routing_reason ? (
+                          <span className="text-zinc-500">
+                            planner chose this — {turn.answer.routing_reason}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-400">(agent forced)</span>
+                        )}
+                      </div>
+                    )}
+
+                    <p
+                      className={`whitespace-pre-wrap text-base leading-relaxed ${
+                        turn.error
+                          ? "text-red-700 dark:text-red-300"
+                          : "text-zinc-800 dark:text-zinc-200"
+                      }`}
+                    >
+                      {turn.text}
+                    </p>
+
+                    {turn.answer && turn.answer.tool_calls.length > 0 && (
+                      <div className="mt-3 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                        <button
+                          onClick={() => setExpandedTools(expandedTools === i ? null : i)}
+                          className="text-xs text-zinc-500 underline decoration-dotted"
+                        >
+                          {expandedTools === i ? "Hide" : "Show"} {turn.answer.tool_calls.length}{" "}
+                          tool call{turn.answer.tool_calls.length === 1 ? "" : "s"} ·{" "}
+                          {turn.answer.tool_calls.map((t) => t.tool).join(", ")}
+                        </button>
+
+                        {expandedTools === i && (
+                          <ol className="mt-2 space-y-2">
+                            {turn.answer.tool_calls.map((tc, j) => (
+                              <li key={j} className="border-l-2 border-zinc-300 pl-2 dark:border-zinc-600">
+                                <div className="font-mono text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                                  {tc.tool}({JSON.stringify(tc.arguments)})
+                                </div>
+                                <pre className="mt-0.5 max-h-28 overflow-auto whitespace-pre-wrap break-all text-[11px] text-zinc-500">
+                                  {tc.result_preview}
+                                </pre>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            )}
+
+            {loading && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl rounded-bl-sm border border-zinc-200 bg-zinc-50 px-4 py-3 text-base text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/50">
+                  Thinking…
+                </div>
+              </div>
+            )}
+
+            <div ref={endRef} />
           </div>
 
-          {error && (
-            <div className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-              {error}
+          {/* ---------------- composer ---------------- */}
+          <div className="border-t border-zinc-200 p-4 dark:border-zinc-800">
+            <div className="flex items-end gap-2">
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={onKeyDown}
+                rows={2}
+                placeholder="Ask anything…   (Enter to send · Shift+Enter for a new line)"
+                className="flex-1 resize-none rounded-lg border border-zinc-300 px-4 py-3 text-base outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:focus:border-zinc-100"
+              />
+              <button
+                onClick={() => submit(message)}
+                disabled={loading || !message.trim()}
+                className="rounded-lg bg-zinc-900 px-5 py-3 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
+              >
+                Send
+              </button>
             </div>
-          )}
 
-          {result && (
-            <div className="mt-5 space-y-4">
-              <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded bg-zinc-900 px-2 py-0.5 text-white dark:bg-white dark:text-zinc-900">
-                    {result.agent}
-                  </span>
-                  <span className="text-zinc-500">
-                    {result.iterations} LLM turn{result.iterations === 1 ? "" : "s"} ·{" "}
-                    {result.tool_calls.length} tool call{result.tool_calls.length === 1 ? "" : "s"}
-                  </span>
-                  {result.routing_reason ? (
-                    <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                      planner chose this — {result.routing_reason}
-                    </span>
-                  ) : (
-                    <span className="text-zinc-400">(you forced this agent)</span>
-                  )}
-                </div>
-                <p className="whitespace-pre-wrap text-sm text-zinc-800 dark:text-zinc-200">
-                  {result.answer}
-                </p>
-                {result.stopped_early && (
-                  <p className="mt-2 text-xs text-amber-700 dark:text-amber-500">
-                    Hit the tool-call limit — answer may be partial.
-                  </p>
-                )}
-              </div>
-
-              {result.tool_calls.length > 0 && (
-                <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                  <h3 className="mb-3 text-xs font-semibold text-zinc-500">
-                    Tools the agent actually called
-                  </h3>
-                  <ol className="space-y-3">
-                    {result.tool_calls.map((tc, i) => (
-                      <li key={i} className="border-l-2 border-zinc-200 pl-3 dark:border-zinc-700">
-                        <div className="font-mono text-xs font-medium text-zinc-800 dark:text-zinc-200">
-                          {tc.tool}({JSON.stringify(tc.arguments)})
-                        </div>
-                        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[11px] text-zinc-500">
-                          {tc.result_preview}
-                        </pre>
-                      </li>
+            <div className="mt-2 flex items-center gap-2 text-xs text-zinc-500">
+              {!showOverride ? (
+                <button onClick={() => setShowOverride(true)} className="underline decoration-dotted">
+                  Force a specific agent
+                </button>
+              ) : (
+                <>
+                  <select
+                    value={agent}
+                    onChange={(e) => setAgent(e.target.value)}
+                    className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800"
+                  >
+                    <option value="">Auto (planner decides)</option>
+                    {Object.keys(agents).map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
                     ))}
-                  </ol>
-                </div>
+                  </select>
+                  <button
+                    onClick={() => {
+                      setAgent("");
+                      setShowOverride(false);
+                    }}
+                    className="underline decoration-dotted"
+                  >
+                    hide
+                  </button>
+                </>
               )}
             </div>
-          )}
+          </div>
         </div>
 
-        <aside className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="mb-3 text-xs font-semibold text-zinc-500">Agents & their permissions</h3>
+        {/* ---------------- sidebar ---------------- */}
+        <aside className="flex h-[calc(100vh-250px)] min-h-[540px] flex-col overflow-y-auto rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <h3 className="mb-2 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+            How a question is handled
+          </h3>
+          <ol className="mb-6 space-y-1.5 text-xs leading-relaxed text-zinc-500">
+            <li>
+              1. A <strong>planner</strong> reads your question and picks a specialist
+            </li>
+            <li>2. That agent decides which of ITS tools to call</li>
+            <li>3. Our Python runs the tool and feeds the result back</li>
+            <li>4. Repeat until it answers — every call shown with the reply</li>
+          </ol>
+
+          <h3 className="mb-3 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+            Agents &amp; permissions
+          </h3>
           <ul className="space-y-3">
             {Object.entries(agents).map(([name, cfg]) => (
               <li key={name} className="border-b border-zinc-100 pb-3 last:border-0 dark:border-zinc-800">
@@ -211,18 +301,15 @@ export default function CopilotPage() {
 
                 {AGENT_EXAMPLES[name] && (
                   <button
-                    onClick={() => {
-                      setMessage(AGENT_EXAMPLES[name]);
-                      submit(AGENT_EXAMPLES[name]);
-                    }}
-                    className="mt-1.5 block w-full rounded border border-zinc-200 px-2 py-1 text-left text-[11px] italic text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                    title="Ask this — the planner should route it to this agent"
+                    onClick={() => submit(AGENT_EXAMPLES[name])}
+                    className="mt-2 block w-full rounded border border-zinc-200 px-2 py-1.5 text-left text-xs italic text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    title="Ask this — the planner should route it here"
                   >
                     &ldquo;{AGENT_EXAMPLES[name]}&rdquo;
                   </button>
                 )}
 
-                <div className="mt-1.5 flex flex-wrap gap-1">
+                <div className="mt-2 flex flex-wrap gap-1">
                   {cfg.tools.map((t) => (
                     <span
                       key={t}
@@ -235,7 +322,8 @@ export default function CopilotPage() {
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-[11px] leading-relaxed text-zinc-400">
+
+          <p className="mt-4 text-xs leading-relaxed text-zinc-400">
             Each agent can only call the tools listed. The email agent literally cannot touch
             your resume — it was never given that tool.
           </p>
