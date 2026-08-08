@@ -34,9 +34,23 @@ def clean_salary(column: str = "salary"):
     back, which is dramatically slower and adds a whole class of failure modes. Native
     expressions compile into Spark's engine and stay in the JVM. "Avoid Python UDFs when
     a native expression exists" is one of the highest-value Spark lessons there is.
+
+    Keep the decimal point. Stripping every non-digit — which is what this did originally —
+    turns 160000.0 into "1600000" and 54217.83 into "5421783": a silent 10x-100x inflation.
+    It went unnoticed for as long as every salary was a whole number, because the synthetic
+    generator only ever emitted ints. The moment real postings arrived carrying converted
+    (and therefore fractional) values, average US salary read $10,186,234.
+
+    The lesson worth keeping: a transformation that is correct for all CURRENT inputs is
+    not the same as a correct transformation. This one encoded "salaries have no decimals"
+    as an assumption without ever stating it.
     """
-    digits_only = F.regexp_replace(F.col(column).cast("string"), r"[^0-9]", "")
-    return F.when(digits_only == "", None).otherwise(digits_only.cast("long"))
+    numeric = F.regexp_replace(F.col(column).cast("string"), r"[^0-9.]", "")
+    # Take digits BEFORE the first dot. Casting "123.45" straight to long would work, but
+    # a malformed "1.2.3" casts to null and silently drops the row's salary — extracting
+    # the whole part keeps a usable number and never invents one.
+    whole = F.regexp_extract(numeric, r"^(\d+)", 1)
+    return F.when(whole == "", None).otherwise(whole.cast("long"))
 
 
 def run(input_path: str, output_path: str) -> None:

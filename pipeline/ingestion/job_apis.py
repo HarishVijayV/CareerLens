@@ -23,6 +23,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -33,8 +34,112 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import publish_postings_discovered  # noqa: E402
 
+
+def _load_env_file() -> None:
+    """Read infra/.env into os.environ for keys that aren't already set.
+
+    Without this, running this script from the host silently found no Adzuna keys and
+    printed "adzuna: SKIPPED" even though the keys were sitting in infra/.env — the file
+    is only loaded automatically by docker compose, and this script usually runs outside
+    a container. The failure was quiet and looked like a configuration choice rather than
+    a bug, so the pipeline ran on synthetic data for weeks without anyone noticing.
+
+    Existing environment variables win, so a real export or a compose-injected value is
+    never overwritten by the file.
+    """
+    env_file = Path(__file__).resolve().parents[2] / "infra" / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file()
+
 TIMEOUT = 30.0
-ADZUNA_PAGES_PER_TERM = 2  # 50 results/page; keep small to stay inside the free quota
+ADZUNA_PAGES_PER_TERM = 5  # 50 results/page; Adzuna's free tier allows ~250 calls/day
+
+# Adzuna reports every salary in the country's OWN currency, with no currency field and
+# no unit marker — an Indian posting returns 3000000 and a US one returns 160000, both as
+# a bare number. Loading those into one `salary` column made every Indian role look like a
+# $3M outlier, which then skewed the MLlib training set and every salary chart.
+#
+# Rates are pinned, not fetched. A live FX call would make the same input produce different
+# output on different days, so a pipeline re-run could no longer be compared to the previous
+# one — and a rate API is one more thing that can be down. Approximate-but-stable beats
+# precise-but-irreproducible here; the number is a comparison aid, not an accounting figure.
+FX_TO_USD = {
+    "adzuna_in": 1 / 83.0,   # INR, mid-2024
+    "adzuna_gb": 1.27,       # GBP
+    "adzuna_us": 1.0,
+    "remotive": 1.0,
+}
+
+# Adzuna has no tags field, so skills have to come out of the description text. This
+# vocabulary deliberately MIRRORS generate_synthetic_data.py::SKILL_POOL — if real and
+# synthetic postings named skills differently, every skill chart would silently split into
+# two populations ("Postgres" vs "PostgreSQL") and the counts would be wrong.
+#
+# Keyword matching, not an LLM: this runs over every posting on every ingest, so it has to
+# be free and deterministic. The skill_extractor AGENT exists for the case where nuance
+# actually matters (reading one job description on demand); using it here would cost a
+# model call per posting to answer a question a word list answers correctly.
+SKILL_PATTERNS = {
+    "Python": r"\bpython\b", "SQL": r"\bsql\b", "Spark": r"\b(?:py)?spark\b",
+    "Hadoop": r"\bhadoop\b", "Airflow": r"\bairflow\b", "Kafka": r"\bkafka\b",
+    "dbt": r"\bdbt\b", "Snowflake": r"\bsnowflake\b",
+    "AWS": r"\b(?:aws|amazon web services)\b", "Azure": r"\bazure\b",
+    "GCP": r"\b(?:gcp|google cloud)\b", "Docker": r"\bdocker\b",
+    "Kubernetes": r"\b(?:kubernetes|k8s)\b", "FastAPI": r"\bfastapi\b",
+    "React": r"\breact(?:\.js)?\b", "PostgreSQL": r"\b(?:postgresql|postgres)\b",
+    "Redis": r"\bredis\b", "Terraform": r"\bterraform\b",
+    "Java": r"\bjava\b(?!script)", "Scala": r"\bscala\b",
+}
+_COMPILED_SKILLS = {name: re.compile(pat, re.I) for name, pat in SKILL_PATTERNS.items()}
+
+
+def extract_skills(*texts: str | None) -> list[str]:
+    """Pull known skills out of free text.
+
+    `Java` excludes `JavaScript` via negative lookahead — without it every JavaScript
+    posting counted as a Java posting, which is the classic substring-matching bug and
+    would have quietly inflated Java demand in the charts.
+    """
+    blob = " ".join(t for t in texts if t)
+    return [name for name, pattern in _COMPILED_SKILLS.items() if pattern.search(blob)]
+
+
+# A full-time annual salary below this (USD-equivalent) is not credible for the roles we
+# ingest. Observed values like $217 come from Indian postings that quote a MONTHLY figure
+# in a field the API documents as annual.
+#
+# These are nulled, not repaired. We cannot distinguish "monthly figure" from "hourly
+# rate" from "part-time role" from "typo" using the data we have, so any repair would be a
+# guess — and a guessed salary is worse than a missing one, because it silently enters the
+# MLlib training set and every average. Nulling loses a row's salary; guessing corrupts
+# the aggregate. `salary IS NULL` is already handled everywhere downstream.
+MIN_CREDIBLE_ANNUAL_USD = 5_000
+
+_dropped_implausible = 0
+
+
+def to_usd(salary, source: str):
+    """Convert a source's native-currency salary to USD so one column means one thing."""
+    global _dropped_implausible
+    if salary is None:
+        return None
+    try:
+        value = round(float(salary) * FX_TO_USD.get(source, 1.0), 2)
+    except (TypeError, ValueError):
+        return None
+    if value < MIN_CREDIBLE_ANNUAL_USD:
+        _dropped_implausible += 1
+        return None
+    return value
 
 
 def _normalize(
@@ -51,22 +156,65 @@ def _normalize(
 ) -> dict:
     """Every source has its own field names — normalizing at the EDGE means the Spark ETL
     downstream sees one consistent shape and doesn't need per-source branching. Doing
-    this here rather than later is what keeps the pipeline simple."""
+    this here rather than later is what keeps the pipeline simple.
+
+    Three things are normalised here that used to leak downstream:
+
+    * salary -> USD. Adzuna returns each country's native currency as a bare number with
+      no currency field, so Indian roles arrived as 3000000 next to US roles at 160000.
+    * skills. Adzuna has no tags field at all. A comment here once claimed "the ETL
+      extracts from text" — it never did, so every Adzuna posting reached the warehouse
+      with an EMPTY skill list. That silently broke job matching (nothing to match on) and
+      under-counted every skill chart, while looking like a data-coverage problem rather
+      than a missing implementation.
+    * is_real. Downstream needs to tell a live posting from a generated one — to rank real
+      ones first, to filter to them, and to keep synthetic rows out of any claim about the
+      actual market.
+    """
+    text_skills = skills or extract_skills(title, description)
     return {
         "posting_id": posting_id,
         "title": (title or "").strip() or None,
         "company": company,
         "location": location,
         "region": region,
-        "seniority": "unknown",  # inferred later by the Spark ETL / skill-extractor agent
+        "seniority": _infer_seniority(title, description),
         "remote": source == "remotive",
-        "salary": salary,
-        "required_skills": skills,
+        "salary": to_usd(salary, source),
+        "salary_currency_original": _NATIVE_CURRENCY.get(source, "USD"),
+        "required_skills": text_skills,
         "description": (description or "")[:2000],
         "source": source,
+        "is_real": True,
         "url": url,
         "posted_month": None,
     }
+
+
+_NATIVE_CURRENCY = {"adzuna_in": "INR", "adzuna_gb": "GBP", "adzuna_us": "USD", "remotive": "USD"}
+
+# Ordered most-specific first: "senior data engineer" must not match the junior rule via
+# some later substring, and a bare title with no signal stays "mid" rather than guessing.
+_SENIORITY_RULES = [
+    ("senior", re.compile(r"\b(senior|sr\.?|lead|principal|staff|head of|manager|architect)\b", re.I)),
+    ("junior", re.compile(r"\b(junior|jr\.?|intern|internship|graduate|entry[- ]level|trainee|associate)\b", re.I)),
+]
+
+
+def _infer_seniority(title: str | None, description: str | None) -> str:
+    """Adzuna has no seniority field, and the ETL's downstream charts group by it.
+
+    Title first, description only as a fallback: a description mentioning "you'll report
+    to a senior engineer" describes a colleague, not the role, so trusting body text
+    equally would mislabel junior roles as senior.
+    """
+    for label, pattern in _SENIORITY_RULES:
+        if pattern.search(title or ""):
+            return label
+    for label, pattern in _SENIORITY_RULES:
+        if pattern.search((description or "")[:400]):
+            return label
+    return "mid"
 
 
 def _matches_terms(title: str, tags: list[str], terms: list[str]) -> bool:
@@ -246,6 +394,23 @@ def main(out_path: Path, terms: list[str], countries: list[str], include_europe:
             f.write(json.dumps(posting) + "\n")
 
     print(f"\nWrote {len(unique):,} unique real postings -> {out_path}")
+
+    # Report what was thrown away. A pipeline that silently discards rows is one you can't
+    # trust the totals from — if skills coverage looks low or the average salary shifts,
+    # this line is the difference between "the API changed" and "our filter is too strict".
+    with_salary = sum(1 for p in unique.values() if p.get("salary"))
+    with_skills = sum(1 for p in unique.values() if p.get("required_skills"))
+    print(
+        f"  salary present: {with_salary:,}/{len(unique):,} "
+        f"({100 * with_salary // max(len(unique), 1)}%)  |  "
+        f"skills extracted: {with_skills:,}/{len(unique):,} "
+        f"({100 * with_skills // max(len(unique), 1)}%)"
+    )
+    if _dropped_implausible:
+        print(
+            f"  dropped {_dropped_implausible:,} implausible salaries "
+            f"(< ${MIN_CREDIBLE_ANNUAL_USD:,} USD/yr — monthly figures in an annual field)"
+        )
 
     # Announce each new posting so independent consumers can react immediately, without
     # ingestion needing to know they exist. See pipeline/events.py for the honest

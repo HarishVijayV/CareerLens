@@ -94,6 +94,16 @@ def filter_options():
             "WHERE seniority IS NOT NULL ORDER BY seniority"
         )],
         "pay_bands": ["above_market", "at_market", "below_market"],
+        # Counts, not just labels. "Real job-board postings" next to a number tells the
+        # user what the filter will actually give them before they click it — a filter
+        # that turns out to return 12 rows is worth knowing about in advance.
+        "source_counts": {
+            r["kind"]: r["n"]
+            for r in _rows(
+                "SELECT CASE WHEN is_real THEN 'real' ELSE 'synthetic' END AS kind, "
+                "COUNT(*) AS n FROM analytics.fact_job_posting GROUP BY 1"
+            )
+        },
     }
 
 
@@ -106,6 +116,9 @@ def search_jobs(
     remote_only: bool = False,
     min_salary: int | None = None,
     pay_band: str | None = Query(None, description="above_market | at_market | below_market"),
+    source_type: str | None = Query(
+        None, description="real = live job-board postings only | synthetic = generated only"
+    ),
     limit: int = Query(25, le=100),
     offset: int = 0,
 ):
@@ -143,6 +156,10 @@ def search_jobs(
             "WHERE b.posting_id = f.posting_id AND s.skill_name = :skill)"
         )
         params["skill"] = skill
+    if source_type == "real":
+        where.append("f.is_real = true")
+    elif source_type == "synthetic":
+        where.append("f.is_real = false")
 
     clause = " AND ".join(where)
 
@@ -150,11 +167,20 @@ def search_jobs(
         f"""
         SELECT f.posting_id, f.title, c.company_name, f.location, f.region,
                f.seniority, f.remote, f.salary, f.posted_month,
-               f.predicted_salary, f.salary_vs_market, f.pay_band
+               f.predicted_salary, f.salary_vs_market, f.pay_band,
+               f.is_real, f.source, f.url
         FROM analytics.fact_job_posting f
         LEFT JOIN analytics.dim_company c ON c.company_id = f.company_id
         WHERE {clause}
-        ORDER BY f.salary DESC NULLS LAST
+        -- Real postings first, ALWAYS — including when no filter is applied. A real
+        -- posting has a URL you can actually apply through; a synthetic one exists to
+        -- give the pipeline volume. Sorting by salary alone buried every real posting
+        -- under generated rows that happened to score higher, which made the job board
+        -- look impressive and be useless.
+        --
+        -- Salary remains the tiebreak WITHIN each group, so the ordering people expect
+        -- still holds; provenance just outranks it.
+        ORDER BY f.is_real DESC, f.salary DESC NULLS LAST
         LIMIT :limit OFFSET :offset
         """,
         **params,
@@ -173,7 +199,8 @@ def get_job(posting_id: str):
         """
         SELECT f.posting_id, f.title, c.company_name, f.location, f.region,
                f.seniority, f.remote, f.salary, f.posted_month,
-               f.predicted_salary, f.salary_vs_market, f.pay_band
+               f.predicted_salary, f.salary_vs_market, f.pay_band,
+               f.is_real, f.source, f.url
         FROM analytics.fact_job_posting f
         LEFT JOIN analytics.dim_company c ON c.company_id = f.company_id
         WHERE f.posting_id = :posting_id

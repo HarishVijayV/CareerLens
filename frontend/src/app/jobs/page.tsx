@@ -18,9 +18,11 @@ export default function JobsPage() {
   // because the user guessed a spelling the DB doesn't use.
   const [filters, setFilters] = useState<{
     skills: string[]; regions: string[]; seniorities: string[]; pay_bands: string[];
+    source_counts?: { real?: number; synthetic?: number };
   }>({ skills: [], regions: [], seniorities: [], pay_bands: [] });
   const [payBand, setPayBand] = useState("");
   const [region, setRegion] = useState("");
+  const [sourceType, setSourceType] = useState("");
 
   const [q, setQ] = useState("");
   const [skill, setSkill] = useState("");
@@ -38,6 +40,7 @@ export default function JobsPage() {
         seniority,
         region,
         pay_band: payBand,
+        source_type: sourceType,
         remote_only: remoteOnly,
         min_salary: minSalary ? Number(minSalary) : undefined,
         limit: PAGE_SIZE,
@@ -112,6 +115,30 @@ export default function JobsPage() {
             {filters.regions.map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
+          </select>
+        </label>
+
+        {/* Provenance filter. Counts are shown in the labels because "real postings" is
+            only meaningful next to how many there are — 4,911 of 151,883 sets a very
+            different expectation than the bare word does. */}
+        <label className="flex flex-col gap-1 text-sm text-zinc-500">
+          Source
+          <select
+            value={sourceType}
+            onChange={(e) => setSourceType(e.target.value)}
+            className="w-44 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
+          >
+            <option value="">All (real listed first)</option>
+            <option value="real">
+              Real job-board only
+              {filters.source_counts?.real ? ` (${filters.source_counts.real.toLocaleString()})` : ""}
+            </option>
+            <option value="synthetic">
+              Generated only
+              {filters.source_counts?.synthetic
+                ? ` (${filters.source_counts.synthetic.toLocaleString()})`
+                : ""}
+            </option>
           </select>
         </label>
 
@@ -195,7 +222,36 @@ export default function JobsPage() {
                 className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
               >
                 <td className="px-4 py-2.5 font-medium text-zinc-900 dark:text-zinc-100">
-                  {job.title}
+                  {job.url ? (
+                    // A real posting has somewhere to apply. Linking the title is the
+                    // whole point of ingesting real data — without it the row is just
+                    // as inert as a generated one.
+                    <a
+                      href={job.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline decoration-zinc-300 underline-offset-2 hover:decoration-current"
+                    >
+                      {job.title}
+                    </a>
+                  ) : (
+                    job.title
+                  )}
+                  {job.is_real ? (
+                    <span
+                      title={`Live posting from ${job.source ?? "a job board"} — the link opens the real listing`}
+                      className="ml-2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                    >
+                      live
+                    </span>
+                  ) : (
+                    <span
+                      title="Generated posting — exists to give the pipeline volume, not applyable"
+                      className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
+                    >
+                      sample
+                    </span>
+                  )}
                   {job.remote && (
                     <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                       remote

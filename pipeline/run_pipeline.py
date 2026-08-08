@@ -97,7 +97,14 @@ def main() -> None:
         timings["real"] = run_step(
             "2. Fetch real postings from job-board APIs",
             [py, "ingestion/job_apis.py", "--out", "data/raw/real_postings.jsonl",
-             "--terms", "Data Engineer,Analytics Engineer,Machine Learning Engineer",
+             # Broader term list than the obvious three: each term is a separate API
+             # query, and Adzuna's free tier allows far more calls per day than this
+             # uses. More terms is the cheapest way to raise real-posting volume, and
+             # real rows are the ones the app actually surfaces first.
+             "--terms",
+             "Data Engineer,Analytics Engineer,Machine Learning Engineer,Data Scientist,"
+             "Data Analyst,Backend Engineer,Software Engineer,Business Intelligence,"
+             "Big Data Engineer,MLOps Engineer",
              "--countries", "in,us"],
         )
 

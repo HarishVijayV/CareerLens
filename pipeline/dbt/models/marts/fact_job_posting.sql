@@ -11,6 +11,13 @@ select
     p.remote,
     p.salary,
     p.posted_month,
+    -- Carried to the fact table so the API can rank and filter on provenance without
+    -- joining back to staging. A real posting is one you can actually apply to; a
+    -- synthetic one exists to give the pipeline volume. Conflating them in the UI would
+    -- be the single most misleading thing this project could do.
+    p.is_real,
+    p.source,
+    p.url,
     -- ML output joined in here, which is what turns the model from a training script
     -- into a product feature: every posting carries what the model thinks it SHOULD pay
     -- and how far the advertised salary sits from that.
