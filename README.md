@@ -22,6 +22,7 @@ frontend.
 | dbt | 5 models, **17/17 data-quality tests passing** |
 | Tests | 24 Python tests passing |
 | Airflow | DAG parses, 7 tasks, 0 import errors |
+| Kubernetes | 14/14 pods running on a 3-node kind cluster, self-healing verified |
 
 Raw numbers: `pipeline/data/benchmark_results.json`, `pipeline/data/model_metrics.json`.
 
@@ -75,6 +76,8 @@ cd pipeline && python run_pipeline.py
 | [docs/AGENTIC_AI.md](docs/AGENTIC_AI.md) | The agent loop, sub-agents, tools, LangGraph comparison |
 | [docs/AUTH_AND_SECURITY.md](docs/AUTH_AND_SECURITY.md) | JWT, refresh rotation, cookies, RBAC, rate limiting |
 | [docs/LESSONS.md](docs/LESSONS.md) | **Real bugs hit while building, and what each one teaches** |
+| [docs/KUBERNETES.md](docs/KUBERNETES.md) | Running on Kubernetes — verified on a 3-node cluster |
+| [docs/CLOUD_LEARNING_PLAN.md](docs/CLOUD_LEARNING_PLAN.md) | Staged plan to get this into a real cloud, free |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | What's done, what's next, cloud plan |
 
 ## Repo layout
