@@ -77,6 +77,7 @@ def search_jobs(
     seniority: str | None = None,
     remote_only: bool = False,
     min_salary: int | None = None,
+    pay_band: str | None = Query(None, description="above_market | at_market | below_market"),
     limit: int = Query(25, le=100),
     offset: int = 0,
 ):
@@ -102,6 +103,11 @@ def search_jobs(
     if min_salary:
         where.append("f.salary >= :min_salary")
         params["min_salary"] = min_salary
+    if pay_band:
+        # Surfacing the ML output as a FILTER is what makes the model a feature
+        # rather than a metric in a JSON file somewhere.
+        where.append("f.pay_band = :pay_band")
+        params["pay_band"] = pay_band
     if skill:
         where.append(
             "EXISTS (SELECT 1 FROM analytics.bridge_posting_skill b "
@@ -115,7 +121,8 @@ def search_jobs(
     jobs = _rows(
         f"""
         SELECT f.posting_id, f.title, c.company_name, f.location, f.region,
-               f.seniority, f.remote, f.salary, f.posted_month
+               f.seniority, f.remote, f.salary, f.posted_month,
+               f.predicted_salary, f.salary_vs_market, f.pay_band
         FROM analytics.fact_job_posting f
         LEFT JOIN analytics.dim_company c ON c.company_id = f.company_id
         WHERE {clause}
@@ -137,7 +144,8 @@ def get_job(posting_id: str):
     job = _rows(
         """
         SELECT f.posting_id, f.title, c.company_name, f.location, f.region,
-               f.seniority, f.remote, f.salary, f.posted_month
+               f.seniority, f.remote, f.salary, f.posted_month,
+               f.predicted_salary, f.salary_vs_market, f.pay_band
         FROM analytics.fact_job_posting f
         LEFT JOIN analytics.dim_company c ON c.company_id = f.company_id
         WHERE f.posting_id = :posting_id

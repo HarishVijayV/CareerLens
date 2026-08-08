@@ -10,6 +10,15 @@ select
     p.seniority,
     p.remote,
     p.salary,
-    p.posted_month
+    p.posted_month,
+    -- ML output joined in here, which is what turns the model from a training script
+    -- into a product feature: every posting carries what the model thinks it SHOULD pay
+    -- and how far the advertised salary sits from that.
+    s.predicted_salary,
+    s.salary_vs_market,
+    coalesce(s.pay_band, 'unknown') as pay_band
 from {{ ref('stg_postings') }} p
 left join {{ ref('dim_company') }} c on c.company_name = p.company_name
+-- LEFT JOIN deliberately: a posting with no salary can't be scored, and it must still
+-- appear in the fact table. An inner join here would silently delete rows.
+left join {{ source('raw', 'posting_scores') }} s on s.posting_id = p.posting_id

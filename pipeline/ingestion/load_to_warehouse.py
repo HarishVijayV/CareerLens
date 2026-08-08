@@ -38,6 +38,7 @@ from paths import long_path  # noqa: E402
 TABLE_MAP = {
     "postings.parquet": "postings",
     "postings_posting_skills.parquet": "posting_skills",
+    "postings_scored.parquet": "posting_scores",
     "postings_skill_demand.parquet": "skill_demand",
     "postings_salary_by_seniority.parquet": "salary_by_seniority",
     "postings_postings_by_month.parquet": "postings_by_month",
@@ -45,7 +46,13 @@ TABLE_MAP = {
 }
 
 # Postgres type overrides; anything not listed is inferred from the pandas dtype.
-TYPE_OVERRIDES = {"remote": "boolean", "salary_clean": "bigint", "posted_month": "integer"}
+TYPE_OVERRIDES = {
+    "remote": "boolean",
+    "salary_clean": "bigint",
+    "posted_month": "integer",
+    "predicted_salary": "bigint",
+    "salary_vs_market": "bigint",
+}
 
 
 def read_spark_parquet(parquet_dir: Path) -> pd.DataFrame:

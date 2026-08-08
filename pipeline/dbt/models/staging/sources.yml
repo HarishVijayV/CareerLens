@@ -17,6 +17,12 @@ sources:
           skills appear in many postings — a classic many-to-many, modeled as a bridge
           table rather than an array column so the SQL stays portable across Postgres
           and Snowflake.
+      - name: posting_scores
+        description: >
+          Batch ML output from pipeline/spark_jobs/mllib_salary_model.py — predicted
+          salary and how far each posting's advertised salary sits from it. Scored in
+          batch and joined into the fact table, rather than predicted per request:
+          features only change when the pipeline runs.
       - name: skill_demand
         description: Pre-aggregated skill frequency, computed in Spark.
       - name: salary_by_seniority
