@@ -47,6 +47,25 @@ export default function AnalyticsPage() {
           Every number here is computed by the data pipeline — Spark cleans and aggregates,
           dbt models it into a star schema, and these charts read the result.
         </p>
+
+        {/* Provenance, stated explicitly. "Is this AI?" is the first thing anyone asks of
+            a dashboard in an AI-branded product, and leaving it ambiguous invites the
+            assumption that the numbers were generated rather than computed. */}
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+            <strong>SQL</strong> — these charts: plain aggregations over the warehouse
+          </span>
+          <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+            <strong>ML</strong> — pay bands on the Jobs page: Spark MLlib, batch-scored
+          </span>
+          <span className="rounded-full border border-zinc-300 px-2.5 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+            <strong>LLM</strong> — only the AI Copilot &amp; Resume assistant
+          </span>
+        </div>
+        <p className="mt-2 text-xs text-zinc-400">
+          No number on this page was produced by a language model — they are SQL results,
+          which is why they are reproducible and identical on every refresh.
+        </p>
       </div>
 
       {error && (

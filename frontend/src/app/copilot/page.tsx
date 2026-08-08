@@ -26,6 +26,10 @@ export default function CopilotPage() {
   const [result, setResult] = useState<AgentAnswer | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Manual agent selection is a DEBUG override, not the normal path — hidden by default.
+  // A prominent dropdown made it look like the user was meant to route manually, which
+  // defeats the point of having a planner at all.
+  const [showOverride, setShowOverride] = useState(false);
 
   useEffect(() => {
     api.listAgents().then(setAgents).catch(() => {});
@@ -71,26 +75,46 @@ export default function CopilotPage() {
               placeholder="Ask anything about jobs, the market, or your resume…"
               className="w-full resize-y rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
             />
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <select
-                value={agent}
-                onChange={(e) => setAgent(e.target.value)}
-                className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-              >
-                <option value="">Auto-route (planner decides)</option>
-                {Object.keys(agents).map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+                className="rounded bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
               >
                 {loading ? "Thinking…" : "Ask"}
               </button>
+
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
+                {!showOverride ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowOverride(true)}
+                    className="underline decoration-dotted"
+                  >
+                    Force a specific agent
+                  </button>
+                ) : (
+                  <>
+                    <select
+                      value={agent}
+                      onChange={(e) => setAgent(e.target.value)}
+                      className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800"
+                    >
+                      <option value="">Auto (planner decides)</option>
+                      {Object.keys(agents).map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => { setAgent(""); setShowOverride(false); }}
+                      className="underline decoration-dotted"
+                    >
+                      hide
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </form>
 
@@ -126,8 +150,12 @@ export default function CopilotPage() {
                     {result.iterations} LLM turn{result.iterations === 1 ? "" : "s"} ·{" "}
                     {result.tool_calls.length} tool call{result.tool_calls.length === 1 ? "" : "s"}
                   </span>
-                  {result.routing_reason && (
-                    <span className="text-zinc-400">— routed: {result.routing_reason}</span>
+                  {result.routing_reason ? (
+                    <span className="rounded bg-blue-50 px-2 py-0.5 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                      planner chose this — {result.routing_reason}
+                    </span>
+                  ) : (
+                    <span className="text-zinc-400">(you forced this agent)</span>
                   )}
                 </div>
                 <p className="whitespace-pre-wrap text-sm text-zinc-800 dark:text-zinc-200">

@@ -194,6 +194,9 @@ export interface ActiveResume {
   content_text: string;
   content_latex: string | null;
   source_format?: string;
+  /** true when the active version was uploaded as a PDF and we kept the original bytes,
+   *  so the preview can show the REAL document instead of extracted text. */
+  has_original_pdf?: boolean;
 }
 
 export const api = {
@@ -227,6 +230,11 @@ export const api = {
 
   // ---- applications & Gmail ----
   listApplications: () => request<Application[]>("/applications"),
+  createApplication: (body: {
+    company: string; role?: string; status?: string; resume_version?: string; posting_id?: string;
+  }) => request<Application>("/applications", { method: "POST", body: JSON.stringify(body) }),
+  updateApplication: (id: string, patch: { status?: string; role?: string; resume_version?: string }) =>
+    request<Application>(`/applications/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   funnel: () => request<FunnelResponse>("/applications/funnel"),
   resumePerformance: () => request<ResumePerformance[]>("/applications/resume-performance"),
   syncInbox: () => request<{ queued: boolean; task_id: string }>("/applications/sync-inbox", { method: "POST" }),

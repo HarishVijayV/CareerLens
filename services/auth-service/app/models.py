@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -126,6 +126,11 @@ class ResumeVersion(Base):
     # set when an agent produced this version, so provenance is never ambiguous
     tailored_for_posting_id: Mapped[str | None] = mapped_column(String, nullable=True)
     change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # The bytes as uploaded. Kept so a PDF resume can be shown AS a PDF — extraction is
+    # lossy and one-way, so without the original there is nothing faithful to display.
+    original_file: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    original_filename: Mapped[str | None] = mapped_column(String, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

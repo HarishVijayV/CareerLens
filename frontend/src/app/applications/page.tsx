@@ -29,6 +29,12 @@ export default function ApplicationsPage() {
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Manual entry. The Gmail sync creates these automatically, but a manual path is
+  // essential: inbox classification will never catch every application, and the page
+  // previously TOLD the user to "add one manually" with no way to do it.
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ company: "", role: "", status: "applied", resume_version: "" });
+
   const load = useCallback(() => {
     api.listApplications().then(setApplications).catch(() => {});
     api.funnel().then(setFunnel).catch(() => {});
@@ -49,6 +55,33 @@ export default function ApplicationsPage() {
       window.location.href = authorization_url;
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Could not start Google sign-in");
+    }
+  }
+
+  async function addApplication(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.company.trim()) return;
+    try {
+      await api.createApplication({
+        company: form.company.trim(),
+        role: form.role.trim() || undefined,
+        status: form.status,
+        resume_version: form.resume_version.trim() || undefined,
+      });
+      setForm({ company: "", role: "", status: "applied", resume_version: "" });
+      setAdding(false);
+      load();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not add application");
+    }
+  }
+
+  async function changeStatus(id: string, status: string) {
+    try {
+      await api.updateApplication(id, { status });
+      load();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not update status");
     }
   }
 
@@ -80,6 +113,12 @@ export default function ApplicationsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAdding((v) => !v)}
+            className="rounded border border-zinc-300 px-4 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            {adding ? "Cancel" : "+ Add application"}
+          </button>
           {gmail?.connected ? (
             <>
               <span className="text-xs text-zinc-500">{gmail.google_email}</span>
@@ -110,6 +149,61 @@ export default function ApplicationsPage() {
         <div className="mb-5 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
           {message}
         </div>
+      )}
+
+      {adding && (
+        <form
+          onSubmit={addApplication}
+          className="mb-6 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+        >
+          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+            Company *
+            <input
+              required
+              value={form.company}
+              onChange={(e) => setForm({ ...form, company: e.target.value })}
+              placeholder="Acme Corp"
+              className="w-44 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+            Role
+            <input
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              placeholder="Data Engineer"
+              className="w-44 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+            Status
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              className="w-40 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            >
+              {Object.entries(STATUS_LABEL).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-zinc-500">
+            Resume version
+            <span className="text-[10px] text-zinc-400">enables the A/B comparison</span>
+            <input
+              value={form.resume_version}
+              onChange={(e) => setForm({ ...form, resume_version: e.target.value })}
+              placeholder="v1-spark"
+              className="w-40 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white dark:bg-white dark:text-zinc-900"
+          >
+            Add
+          </button>
+        </form>
       )}
 
       {funnel && (
@@ -189,9 +283,17 @@ export default function ApplicationsPage() {
                 <td className="px-4 py-2 font-medium text-zinc-900 dark:text-zinc-100">{app.company}</td>
                 <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">{app.role ?? "—"}</td>
                 <td className="px-4 py-2">
-                  <span className={`rounded px-2 py-0.5 text-xs ${STATUS_STYLE[app.status] ?? ""}`}>
-                    {STATUS_LABEL[app.status] ?? app.status}
-                  </span>
+                  {/* Editable inline: moving an application forward is the single most
+                      common action on this page, so it shouldn't need a detail view. */}
+                  <select
+                    value={app.status}
+                    onChange={(e) => changeStatus(app.id, e.target.value)}
+                    className={`cursor-pointer rounded border-0 px-2 py-0.5 text-xs ${STATUS_STYLE[app.status] ?? ""}`}
+                  >
+                    {Object.entries(STATUS_LABEL).map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
                 </td>
                 <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
                   {app.resume_version ?? "—"}

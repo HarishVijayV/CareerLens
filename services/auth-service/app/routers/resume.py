@@ -47,6 +47,7 @@ class VersionOut(BaseModel):
     change_summary: str | None
     created_at: str
     preview: str
+    has_original: bool
 
     class Config:
         from_attributes = True
@@ -64,6 +65,7 @@ def _to_out(version: ResumeVersion) -> VersionOut:
         change_summary=version.change_summary,
         created_at=version.created_at.isoformat(),
         preview=(version.content_text or "")[:200],
+        has_original=bool(version.original_file),
     )
 
 
@@ -114,6 +116,7 @@ def get_active(claims: dict = Depends(get_current_claims), db: Session = Depends
         "content_text": version.content_text,
         "content_latex": version.content_latex,
         "source_format": version.source_format,
+        "has_original_pdf": version.source_format == "pdf" and bool(version.original_file),
     }
 
 
@@ -148,6 +151,10 @@ async def upload_resume(
         content_latex=latex,
         source_format=detected,
         origin="upload",
+        # Keep the original bytes: PDF extraction is lossy, so this is the only faithful
+        # copy of what the user actually uploaded, and it's what /preview serves back.
+        original_file=data,
+        original_filename=file.filename,
     )
     db.add(version)
     db.flush()
@@ -253,20 +260,28 @@ def activate_version(
     return _to_out(version)
 
 
-def _compile_latex_to_pdf(latex: str) -> bytes | None:
-    """Compile LaTeX to PDF if a TeX engine is available; None if not installed.
+class LatexCompileError(Exception):
+    """Compilation ran but produced no PDF — carries the compiler's own error lines."""
 
-    Returning None rather than raising lets the caller degrade to offering the .tex file,
-    which is genuinely useful on its own (Overleaf compiles it in one paste). Shipping a
-    full TeX distribution in this image would add gigabytes for a feature most users
-    won't hit.
 
-    tectonic first: it's a single binary that fetches only the packages a document needs,
-    which is far lighter than a full texlive install.
+def _compile_latex_to_pdf(latex: str) -> bytes:
+    """Compile LaTeX to a PDF.
+
+    Raises FileNotFoundError if no TeX engine is installed, and LatexCompileError with the
+    compiler's actual message if the document itself is broken.
+
+    Those two cases MUST be distinguished. An earlier version returned None for both, so a
+    document with one bad package reported "No TeX engine installed" — sending you off to
+    install software that was already there while the real error (a single line in the
+    LaTeX log) stayed hidden. An error message that names the wrong cause is worse than no
+    message.
+
+    tectonic is preferred when present: it downloads only the packages a document needs,
+    so it compiles more documents than a minimal texlive install.
     """
     engine = shutil.which("tectonic") or shutil.which("pdflatex")
     if not engine:
-        return None
+        raise FileNotFoundError("No TeX engine installed")
 
     with tempfile.TemporaryDirectory() as tmp:
         tex_path = Path(tmp) / "resume.tex"
@@ -275,15 +290,27 @@ def _compile_latex_to_pdf(latex: str) -> bytes | None:
         command = (
             [engine, "--outdir", tmp, str(tex_path)]
             if "tectonic" in engine
-            else [engine, "-interaction=nonstopmode", "-output-directory", tmp, str(tex_path)]
+            # -interaction=nonstopmode stops pdflatex prompting on error and hanging
+            # forever waiting for input that will never arrive in a container.
+            else [engine, "-interaction=nonstopmode", "-halt-on-error",
+                  "-output-directory", tmp, str(tex_path)]
         )
+
         try:
-            subprocess.run(command, cwd=tmp, capture_output=True, timeout=90)
-        except (subprocess.TimeoutExpired, OSError):
-            return None
+            result = subprocess.run(command, cwd=tmp, capture_output=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            raise LatexCompileError("Compilation timed out after 120s (possible infinite loop)")
 
         pdf_path = Path(tmp) / "resume.pdf"
-        return pdf_path.read_bytes() if pdf_path.exists() else None
+        if pdf_path.exists():
+            return pdf_path.read_bytes()
+
+        # No PDF: surface the lines that actually explain why. LaTeX logs are enormous and
+        # mostly noise; the lines starting with "!" are the real errors.
+        output = (result.stdout or b"").decode("utf-8", errors="replace")
+        errors = [ln for ln in output.splitlines() if ln.startswith("!") or "Undefined" in ln]
+        detail = "\n".join(errors[:6]) or output[-600:] or "unknown error"
+        raise LatexCompileError(detail)
 
 
 @router.get("/download")
@@ -321,19 +348,44 @@ def download_resume(
         )
 
     # fmt == "pdf"
-    if not version.content_latex:
-        raise HTTPException(status.HTTP_409_CONFLICT, "PDF export needs a LaTeX version")
+    #
+    # If the user uploaded a PDF, serve THAT rather than refusing. Previously an uploaded
+    # PDF had no LaTeX, so "download PDF" failed on a resume that literally started life
+    # as a PDF — a confusing dead end.
+    if version.source_format == "pdf" and version.original_file:
+        return StreamingResponse(
+            io.BytesIO(version.original_file),
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'inline; filename="resume.pdf"'},
+        )
 
-    pdf = _compile_latex_to_pdf(version.content_latex)
-    if pdf is None:
+    if not version.content_latex:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This version has no LaTeX to compile. Ask the assistant to "
+            "\"convert my resume to LaTeX\" first, then export.",
+        )
+
+    try:
+        pdf = _compile_latex_to_pdf(version.content_latex)
+    except FileNotFoundError:
         raise HTTPException(
             status.HTTP_501_NOT_IMPLEMENTED,
-            "No TeX engine installed in this container. Download the .tex and compile it "
-            "(Overleaf works in one paste), or install tectonic to enable PDF export.",
+            "No TeX engine in this container. Download the .tex and compile it "
+            "(Overleaf works in one paste).",
+        )
+    except LatexCompileError as exc:
+        # 422, not 501: the document is the problem, not the server. The compiler's own
+        # message goes back so the assistant can be asked to fix that specific line.
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"LaTeX failed to compile:\n{exc}\n\n"
+            "Ask the assistant to fix it, or simplify the preamble to standard packages "
+            "(article, geometry, enumitem, hyperref).",
         )
 
     return StreamingResponse(
         io.BytesIO(pdf),
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="resume.pdf"'},
+        headers={"Content-Disposition": 'inline; filename="resume.pdf"'},
     )
