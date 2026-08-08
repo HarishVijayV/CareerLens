@@ -23,6 +23,7 @@ Written so someone who clones this repo cold can understand the whole system —
 11. [Real bugs and what they taught](#11-real-bugs-and-what-they-taught)
 12. [What's deliberately NOT here](#12-whats-deliberately-not-here)
 13. [Interview answers](#13-interview-answers)
+14. [Appendix A — Using OTHER MCP servers](#appendix-a--using-other-mcp-servers-general-reference)
 
 ---
 
@@ -560,6 +561,73 @@ Being able to say why something is absent is as valuable as building it.
 > processes, Deployment replicas for lost pods or nodes, and `helm rollback` on a failed
 > release. I verified the third by deleting a gateway pod mid-request — zero failed
 > requests, replacement running in 40 seconds.
+
+---
+
+## Appendix A — Using OTHER MCP servers (general reference)
+
+> **Not part of this project.** CareerLens *provides* an MCP server; this appendix is about
+> *consuming* someone else's. Kept here as general notes, using GitHub's server as the
+> example, because the two transport styles below apply to every MCP server you'll meet.
+
+### The two transports
+
+| | Remote (`type: http`) | Local (`command: ...`) |
+|---|---|---|
+| Runs where | the provider's servers | your machine |
+| Transport | HTTP | **stdio** — the client launches it as a subprocess and talks over stdin/stdout |
+| Needs Docker/npx | no | yes |
+| Config key | `url` | `command` + `args` |
+
+Remote suits a service someone else operates. Local (stdio) suits a tool that must touch
+your filesystem, or that you'd rather not send data to a third party.
+
+*(CareerLens' own server uses HTTP rather than stdio because it's a long-lived container
+several clients talk to — a stdio server is started fresh by one client and dies with it.)*
+
+### Example — GitHub's MCP server
+
+**Step 1.** Create a token: https://github.com/settings/personal-access-tokens/new →
+*Only select repositories* → grant Contents / Issues / Pull requests.
+
+**Step 2.** Store it as an environment variable (PowerShell), then reopen the terminal:
+```powershell
+setx GITHUB_TOKEN "github_pat_..."
+```
+
+**Step 3.** Add ONE of these to `.mcp.json`:
+
+```jsonc
+// Remote — nothing to install
+"github": {
+  "type": "http",
+  "url": "https://api.githubcopilot.com/mcp/",
+  "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" }
+}
+
+// Local — runs on your machine, needs `docker pull ghcr.io/github/github-mcp-server`
+"github": {
+  "command": "docker",
+  "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+           "ghcr.io/github/github-mcp-server"],
+  "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+}
+```
+
+**Step 4.** Restart the client and check its MCP panel for a connected status.
+
+### The rule that matters
+
+**Always `${GITHUB_TOKEN}`, never the literal token.** `.mcp.json` is committed to the
+repo. A leaked key is exactly what got a Google Cloud project in this account suspended
+for "abusive activity consistent with hijacking" — see §11. The pre-commit hook in
+`.githooks/` would probably catch it, but don't make that your only defence.
+
+### Is it worth adding here?
+
+Honestly, no — `git` and `gh` already cover this repo's needs, and it's one more token to
+manage. MCP servers earn their place when they reach something your existing tools can't:
+a hosted API, a private knowledge base, or — as with CareerLens — your own data.
 
 ---
 
