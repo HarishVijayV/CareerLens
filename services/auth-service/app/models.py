@@ -92,3 +92,93 @@ class UserProfile(Base):
         """Turns the profile into the keyword list handed to the job-board APIs."""
         raw = f"{self.target_roles or ''},{self.headline or ''}"
         return [term.strip() for term in raw.split(",") if term.strip()]
+
+
+class GoogleCredential(Base):
+    """Google OAuth tokens for Gmail access.
+
+    The refresh token is what lets the WORKER poll your inbox on a schedule while you're
+    not sitting at the browser — that's the whole reason offline access exists. It never
+    touches the frontend: the browser only ever sees a one-time authorization code, and
+    the code→token exchange happens server-side.
+
+    Stored encrypted at rest (see app/core/crypto.py). A leaked database should not equal
+    a leaked inbox.
+    """
+
+    __tablename__ = "google_credentials"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
+
+    encrypted_refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
+    encrypted_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    access_token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    scopes: Mapped[str] = mapped_column(Text, default="")
+    google_email: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    user: Mapped["User"] = relationship()
+
+
+class Application(Base):
+    """One job application and its current status.
+
+    This is the fact table of the whole job-hunt story: it's what makes the funnel
+    (applied → interview → offer) and the resume-version A/B comparison computable rather
+    than a feeling.
+    """
+
+    __tablename__ = "applications"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+
+    company: Mapped[str] = mapped_column(String, nullable=False)
+    role: Mapped[str | None] = mapped_column(String, nullable=True)
+    posting_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # applied | rejected | interview_invite | offer | recruiter_outreach
+    status: Mapped[str] = mapped_column(String, default="applied", nullable=False)
+
+    # Which resume produced this outcome — the key to answering "is version B working
+    # better than version A", which is the genuinely useful question.
+    resume_version: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    source: Mapped[str] = mapped_column(String, default="email")  # email | manual
+    applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    events: Mapped[list["ApplicationEvent"]] = relationship(
+        back_populates="application", cascade="all, delete-orphan"
+    )
+
+
+class ApplicationEvent(Base):
+    """Append-only history of status changes.
+
+    Storing events rather than only the current status is what makes time-based questions
+    answerable later — "how long until companies reply?", "did response rates change after
+    I rewrote my resume?" A single mutable status column throws that history away.
+    """
+
+    __tablename__ = "application_events"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    application_id: Mapped[str] = mapped_column(ForeignKey("applications.id"), nullable=False)
+
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Gmail's own message id — the idempotency key. Re-syncing the same inbox must not
+    # create duplicate events, and this unique constraint is what guarantees that at the
+    # database level rather than hoping the code remembers to check.
+    gmail_message_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    application: Mapped["Application"] = relationship(back_populates="events")

@@ -13,6 +13,7 @@ Usage:
     python run_pipeline.py --only spark,dbt   # re-run just some steps
 """
 import argparse
+import os
 import subprocess
 import sys
 import time
@@ -20,6 +21,27 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 DEFAULT_DB = "postgresql://careerlens:change_me@localhost:5432/careerlens"
+
+SNOWFLAKE_VARS = ("SNOWFLAKE_ACCOUNT", "SNOWFLAKE_USER", "SNOWFLAKE_PASSWORD")
+
+
+def resolve_dbt_target(requested: str | None) -> str:
+    """Pick the dbt target: Snowflake if it's configured, Postgres otherwise.
+
+    Both targets run the SAME models and the SAME tests — only the warehouse changes.
+    That's the actual value of writing transformations in dbt rather than engine-specific
+    scripts, and it's why the Snowflake trial expiring costs you nothing: the pipeline
+    keeps running on Postgres without a single file changing.
+    """
+    if requested:
+        return requested
+
+    if all(os.getenv(var) for var in SNOWFLAKE_VARS):
+        print("Snowflake credentials detected -> dbt target 'warehouse'")
+        return "warehouse"
+
+    print("No Snowflake credentials -> dbt target 'dev' (Postgres). See docs/CREDENTIALS.md.")
+    return "dev"
 
 
 def run_step(name: str, command: list[str], cwd: Path | None = None) -> float:
@@ -47,6 +69,12 @@ def main() -> None:
         "--only",
         default="",
         help="comma-separated subset: generate,real,spark,mllib,load,dbt,benchmark",
+    )
+    parser.add_argument(
+        "--target",
+        default=None,
+        choices=["dev", "warehouse"],
+        help="dbt target: dev=Postgres, warehouse=Snowflake. Auto-detected if omitted.",
     )
     args = parser.parse_args()
 
@@ -95,10 +123,15 @@ def main() -> None:
         )
 
     if should("dbt"):
-        timings["dbt_run"] = run_step("6. dbt run — build the star schema",
-                                      ["dbt", "run"], cwd=HERE / "dbt")
-        timings["dbt_test"] = run_step("7. dbt test — data quality gate",
-                                       ["dbt", "test"], cwd=HERE / "dbt")
+        target = resolve_dbt_target(args.target)
+        timings["dbt_run"] = run_step(
+            f"6. dbt run — build the star schema (target: {target})",
+            ["dbt", "run", "--target", target], cwd=HERE / "dbt",
+        )
+        timings["dbt_test"] = run_step(
+            f"7. dbt test — data quality gate (target: {target})",
+            ["dbt", "test", "--target", target], cwd=HERE / "dbt",
+        )
 
     if args.benchmark or "benchmark" in only:
         timings["benchmark"] = run_step(

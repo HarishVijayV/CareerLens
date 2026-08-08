@@ -23,10 +23,15 @@ Usage:
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
 import httpx
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from events import publish_postings_discovered  # noqa: E402
 
 TIMEOUT = 30.0
 ADZUNA_PAGES_PER_TERM = 2  # 50 results/page; keep small to stay inside the free quota
@@ -241,6 +246,16 @@ def main(out_path: Path, terms: list[str], countries: list[str], include_europe:
             f.write(json.dumps(posting) + "\n")
 
     print(f"\nWrote {len(unique):,} unique real postings -> {out_path}")
+
+    # Announce each new posting so independent consumers can react immediately, without
+    # ingestion needing to know they exist. See pipeline/events.py for the honest
+    # justification (and the cases where Kafka would NOT be justified).
+    if unique:
+        sent = publish_postings_discovered(list(unique.values()))
+        if sent:
+            print(f"Published {sent} posting.discovered events")
+        else:
+            print("Kafka unavailable — events skipped (pipeline unaffected)")
 
     if not unique:
         # Deliberately NOT a failure. A third-party board legitimately returning nothing

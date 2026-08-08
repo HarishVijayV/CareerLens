@@ -14,9 +14,10 @@ router = APIRouter(prefix="/api")
 # public segment -> (service base URL, path prefix on that service)
 _SERVICE_MAP = {
     "auth": (settings.auth_service_url, "/auth"),
-    # profile is served by auth-service: identity and profile share an owner and a
-    # database, and splitting them would mean a join across a network boundary.
+    # profile and applications are served by auth-service: they share an owner and a
+    # database with identity, and splitting them would turn a join into a network call.
     "profile": (settings.auth_service_url, "/profile"),
+    "applications": (settings.auth_service_url, "/applications"),
     "agents": (settings.agent_service_url, "/agents"),
     "jobs": (settings.jobs_service_url, "/jobs"),
     "analytics": (settings.jobs_service_url, "/analytics"),

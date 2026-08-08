@@ -18,9 +18,22 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_domain: str = "localhost"
 
+    # Encrypts third-party tokens at rest. Falls back to jwt_secret_key in dev — see
+    # app/core/crypto.py for why that's a convenience, not a recommendation.
+    token_encryption_key: str = ""
+
     google_client_id: str = ""
     google_client_secret: str = ""
-    google_redirect_uri: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+
+    # Where to send the browser after the OAuth dance finishes.
+    frontend_url: str = "http://localhost:3000"
+
+    @property
+    def google_oauth_configured(self) -> bool:
+        """Lets routes return a clear 'not configured' instead of a confusing failure
+        when the operator hasn't set up Google credentials yet."""
+        return bool(self.google_client_id and self.google_client_secret)
 
     class Config:
         env_file = ".env"

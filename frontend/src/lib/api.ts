@@ -82,6 +82,41 @@ export interface AgentAnswer {
   stopped_early: boolean;
 }
 
+export interface Application {
+  id: string;
+  company: string;
+  role: string | null;
+  posting_id: string | null;
+  status: string;
+  resume_version: string | null;
+  source: string;
+  applied_at: string;
+  updated_at: string;
+}
+
+export interface FunnelResponse {
+  total_applications: number;
+  rejected: number;
+  awaiting_response: number;
+  stages: { stage: string; count: number; percent_of_applied: number }[];
+}
+
+export interface ResumePerformance {
+  resume_version: string;
+  applications: number;
+  positive_responses: number;
+  response_rate_percent: number;
+  sample_warning: string | null;
+}
+
+export interface GmailStatus {
+  configured: boolean;
+  connected: boolean;
+  google_email?: string | null;
+  last_synced_at?: string | null;
+  message?: string;
+}
+
 export const api = {
   // ---- auth ----
   signup: (email: string, password: string) =>
@@ -110,6 +145,14 @@ export const api = {
 
   // ---- analytics ----
   analytics: <T>(metric: string) => request<T>(`/analytics/${metric}`),
+
+  // ---- applications & Gmail ----
+  listApplications: () => request<Application[]>("/applications"),
+  funnel: () => request<FunnelResponse>("/applications/funnel"),
+  resumePerformance: () => request<ResumePerformance[]>("/applications/resume-performance"),
+  syncInbox: () => request<{ queued: boolean; task_id: string }>("/applications/sync-inbox", { method: "POST" }),
+  gmailStatus: () => request<GmailStatus>("/auth/google/status"),
+  gmailConnect: () => request<{ authorization_url: string }>("/auth/google/connect"),
 
   // ---- agents ----
   listAgents: () =>
