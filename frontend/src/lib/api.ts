@@ -231,6 +231,13 @@ export const api = {
 
   // ---- profile ----
   getProfile: () => request<Profile>("/profile"),
+  /** Read the active resume and return the profile fields it implies. Returns a
+   *  SUGGESTION — the caller shows it for review; nothing is saved until the user saves. */
+  profileFromResume: () =>
+    request<{
+      source_version: string;
+      suggestion: Partial<Record<keyof Profile, string | null>>;
+    }>("/profile/from-resume", { method: "POST" }),
   updateProfile: (patch: Partial<Profile>) =>
     request<Profile>("/profile", { method: "PATCH", body: JSON.stringify(patch) }),
 

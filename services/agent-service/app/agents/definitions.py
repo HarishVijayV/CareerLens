@@ -137,6 +137,30 @@ AGENTS = {
             '"remote": bool}'
         ),
     },
+    "profile_extractor": {
+        "description": "Reads a resume and returns the structured profile fields it implies.",
+        "tools": [],  # pure text-in, JSON-out — it must not be able to write the profile
+        "system_prompt": (
+            "You read a candidate's resume and extract their profile.\n"
+            "Respond with ONLY a JSON object, no prose, no markdown fences, matching:\n"
+            '{"full_name": str|null, "headline": str|null, "skills": [str], '
+            '"target_roles": [str], "seniority": "junior"|"mid"|"senior"|null, '
+            '"preferred_locations": [str], "countries": [str]}\n\n'
+            "Rules:\n"
+            "- skills: concrete technologies and tools only (Python, Spark, PyTorch). "
+            "Not soft skills, not degrees, not job titles.\n"
+            "- target_roles: the roles this person is plausibly applying FOR, which may "
+            "differ from what they have done. A student finishing an MS in Data Science "
+            "targets Data Scientist / ML Engineer even with no such job yet.\n"
+            "- seniority: judge by real full-time experience. Internships and degrees do "
+            "not make someone mid or senior. Students and new graduates are junior.\n"
+            "- countries: ISO-2 codes, lowercase, ONLY where they are likely to apply. "
+            'Someone studying in the USA who is from India is ["in", "us"].\n'
+            "- Use null or [] for anything the resume does not support. Never guess a "
+            "name, a location, or a skill that is not written down — a wrong value here "
+            "silently corrupts every job search that follows."
+        ),
+    },
     "job_matcher": {
         "description": "Scores how well the user's profile matches real jobs, and finds good ones.",
         "tools": [GET_PROFILE_TOOL, SEARCH_JOBS_TOOL, GET_JOB_TOOL],
