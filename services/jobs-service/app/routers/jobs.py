@@ -69,6 +69,34 @@ def _rows(sql: str, **params) -> list[dict]:
         return [dict(row._mapping) for row in result]
 
 
+@router.get("/filters")
+@cached("filters", ttl=3600)
+def filter_options():
+    """The values a user can actually filter by.
+
+    Exists so the UI offers CHOICES instead of a free-text box. Typing a skill by hand
+    means "spark", "Spark" and "PySpark" all silently return nothing, and the user has no
+    way to know which spelling the warehouse uses — a filter that quietly returns zero
+    results is worse than no filter.
+
+    Cached for an hour: these change only when the pipeline runs.
+    """
+    return {
+        "skills": [r["skill_name"] for r in _rows(
+            "SELECT skill_name FROM analytics.dim_skill ORDER BY posting_count DESC"
+        )],
+        "regions": [r["region"] for r in _rows(
+            "SELECT DISTINCT region FROM analytics.fact_job_posting "
+            "WHERE region IS NOT NULL ORDER BY region"
+        )],
+        "seniorities": [r["seniority"] for r in _rows(
+            "SELECT DISTINCT seniority FROM analytics.fact_job_posting "
+            "WHERE seniority IS NOT NULL ORDER BY seniority"
+        )],
+        "pay_bands": ["above_market", "at_market", "below_market"],
+    }
+
+
 @router.get("/search")
 def search_jobs(
     q: str | None = Query(None, description="free-text match on job title"),

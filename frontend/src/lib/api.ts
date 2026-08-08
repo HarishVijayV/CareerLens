@@ -122,6 +122,11 @@ export interface Job {
   salary: number | null;
   posted_month: number | null;
   required_skills?: string[];
+  /** Spark MLlib output, joined in by dbt — what the model thinks this role should pay
+   *  and how far the advertised salary sits from that. */
+  predicted_salary?: number | null;
+  salary_vs_market?: number | null;
+  pay_band?: string | null;
 }
 
 export interface ToolCall {
@@ -224,6 +229,10 @@ export const api = {
     );
   },
   getJob: (postingId: string) => request<Job>(`/jobs/${postingId}`),
+  jobFilters: () =>
+    request<{ skills: string[]; regions: string[]; seniorities: string[]; pay_bands: string[] }>(
+      "/jobs/filters"
+    ),
 
   // ---- analytics ----
   analytics: <T>(metric: string) => request<T>(`/analytics/${metric}`),

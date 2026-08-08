@@ -13,6 +13,15 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Filter values come from the warehouse, not hardcoded — so the options always match
+  // what's actually in the data, and a filter can never silently return zero results
+  // because the user guessed a spelling the DB doesn't use.
+  const [filters, setFilters] = useState<{
+    skills: string[]; regions: string[]; seniorities: string[]; pay_bands: string[];
+  }>({ skills: [], regions: [], seniorities: [], pay_bands: [] });
+  const [payBand, setPayBand] = useState("");
+  const [region, setRegion] = useState("");
+
   const [q, setQ] = useState("");
   const [skill, setSkill] = useState("");
   const [seniority, setSeniority] = useState("");
@@ -27,6 +36,8 @@ export default function JobsPage() {
         q,
         skill,
         seniority,
+        region,
+        pay_band: payBand,
         remote_only: remoteOnly,
         min_salary: minSalary ? Number(minSalary) : undefined,
         limit: PAGE_SIZE,
@@ -43,6 +54,7 @@ export default function JobsPage() {
   }
 
   useEffect(() => {
+    api.jobFilters().then(setFilters).catch(() => {});
     load(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -77,12 +89,44 @@ export default function JobsPage() {
         </label>
         <label className="flex flex-col gap-1 text-xs text-zinc-500">
           Skill
-          <input
+          <select
             value={skill}
             onChange={(e) => setSkill(e.target.value)}
-            placeholder="e.g. Spark"
-            className="w-32 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-          />
+            className="w-36 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          >
+            <option value="">Any skill</option>
+            {filters.skills.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          Region
+          <select
+            value={region}
+            onChange={(e) => setRegion(e.target.value)}
+            className="w-36 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          >
+            <option value="">Any region</option>
+            {filters.regions.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs text-zinc-500">
+          Pay vs market
+          <select
+            value={payBand}
+            onChange={(e) => setPayBand(e.target.value)}
+            className="w-36 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          >
+            <option value="">Any</option>
+            <option value="above_market">Above market</option>
+            <option value="at_market">At market</option>
+            <option value="below_market">Below market</option>
+          </select>
         </label>
         <label className="flex flex-col gap-1 text-xs text-zinc-500">
           Seniority
@@ -92,9 +136,9 @@ export default function JobsPage() {
             className="w-28 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
           >
             <option value="">Any</option>
-            <option value="junior">Junior</option>
-            <option value="mid">Mid</option>
-            <option value="senior">Senior</option>
+            {filters.seniorities.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs text-zinc-500">
@@ -139,6 +183,9 @@ export default function JobsPage() {
               <th className="px-4 py-2 font-medium">Location</th>
               <th className="px-4 py-2 font-medium">Level</th>
               <th className="px-4 py-2 text-right font-medium">Salary</th>
+              <th className="px-4 py-2 font-medium" title="Spark MLlib prediction vs the advertised salary">
+                vs market
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -161,11 +208,33 @@ export default function JobsPage() {
                 <td className="px-4 py-2 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                   {money(job.salary)}
                 </td>
+                <td className="px-4 py-2">
+                  {job.pay_band && job.pay_band !== "unknown" ? (
+                    <span
+                      title={`Model predicts ${money(job.predicted_salary ?? null)} for this role`}
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${
+                        job.pay_band === "above_market"
+                          ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
+                          : job.pay_band === "below_market"
+                          ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                      }`}
+                    >
+                      {job.pay_band === "above_market"
+                        ? `+${money(job.salary_vs_market ?? null)}`
+                        : job.pay_band === "below_market"
+                        ? money(job.salary_vs_market ?? null)
+                        : "at market"}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-zinc-400">—</span>
+                  )}
+                </td>
               </tr>
             ))}
             {!jobs.length && !loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm text-zinc-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-zinc-500">
                   No postings match these filters.
                 </td>
               </tr>

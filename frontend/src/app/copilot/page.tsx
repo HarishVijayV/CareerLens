@@ -8,8 +8,18 @@ const EXAMPLES = [
   "Which skills pay the most above average?",
   "Find me remote data engineering jobs paying over 120000",
   "How does hiring change across the year?",
-  "Tailor my resume for posting P000177873",
+  "What skills am I missing for a senior data engineer role?",
 ];
+
+/** One concrete question per agent, so the sidebar shows what each is FOR rather than
+ *  just what it's called. Clicking one also proves the planner routes it correctly. */
+const AGENT_EXAMPLES: Record<string, string> = {
+  job_matcher: "What jobs match my skills, and what am I missing?",
+  resume_tailor: "Rewrite my resume bullets to emphasise data engineering",
+  market_analyst: "Which skills pay the most above average?",
+  skill_extractor: "Extract the requirements from this job description: ...",
+  email_classifier: "Classify this email: Subject: Thank you for applying to Acme",
+};
 
 /**
  * Shows the agent's TOOL CALLS alongside its answer, on purpose.
@@ -195,10 +205,24 @@ export default function CopilotPage() {
           <h3 className="mb-3 text-xs font-semibold text-zinc-500">Agents & their permissions</h3>
           <ul className="space-y-3">
             {Object.entries(agents).map(([name, cfg]) => (
-              <li key={name}>
+              <li key={name} className="border-b border-zinc-100 pb-3 last:border-0 dark:border-zinc-800">
                 <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{name}</div>
                 <div className="text-xs text-zinc-500">{cfg.description}</div>
-                <div className="mt-1 flex flex-wrap gap-1">
+
+                {AGENT_EXAMPLES[name] && (
+                  <button
+                    onClick={() => {
+                      setMessage(AGENT_EXAMPLES[name]);
+                      submit(AGENT_EXAMPLES[name]);
+                    }}
+                    className="mt-1.5 block w-full rounded border border-zinc-200 px-2 py-1 text-left text-[11px] italic text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    title="Ask this — the planner should route it to this agent"
+                  >
+                    &ldquo;{AGENT_EXAMPLES[name]}&rdquo;
+                  </button>
+                )}
+
+                <div className="mt-1.5 flex flex-wrap gap-1">
                   {cfg.tools.map((t) => (
                     <span
                       key={t}
