@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, User } from "@/lib/api";
+import { api, ApiError, User } from "@/lib/api";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -27,15 +27,58 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
+  const [unreachable, setUnreachable] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api
-      .me()
-      .then(setUser)
-      .catch(() => router.push("/login"))
-      .finally(() => setChecking(false));
+    let cancelled = false;
+
+    /**
+     * Only a REAL auth failure may send someone to the login page.
+     *
+     * This used to be `.catch(() => router.push("/login"))`, which caught everything —
+     * including the backend being briefly unreachable. Restart auth-service, or lose wifi
+     * for two seconds, and you were bounced to login mid-task with a session that was
+     * still perfectly valid. Losing unsaved work to a transient blip is a much worse
+     * failure than showing a "reconnecting" message for a moment.
+     *
+     * 401/403 means the server looked at the token and rejected it — and by the time this
+     * throws, api.ts has ALREADY tried a silent refresh, so the session really is gone.
+     * A network error or a 5xx means we never got an answer, which says nothing about
+     * whether the user is signed in.
+     */
+    async function check(attempt = 0) {
+      try {
+        const me = await api.me();
+        if (cancelled) return;
+        setUser(me);
+        setUnreachable(false);
+        setChecking(false);
+      } catch (err) {
+        if (cancelled) return;
+
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          router.push("/login");
+          return;
+        }
+
+        // Everything else is "couldn't reach the server". Back off and retry rather than
+        // destroying the session; a container restart is over in a few seconds.
+        if (attempt < 4) {
+          setUnreachable(true);
+          setTimeout(() => check(attempt + 1), 1000 * 2 ** attempt);
+          return;
+        }
+        setUnreachable(true);
+        setChecking(false);
+      }
+    }
+
+    check();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   // Close the menu on an outside click or Escape — both expected of any dropdown, and
@@ -62,8 +105,35 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   if (checking) {
-    return <div className="p-10 text-sm text-zinc-500">Checking session…</div>;
+    return (
+      <div className="p-10 text-sm text-zinc-500">
+        {unreachable ? "Reconnecting to the server…" : "Checking session…"}
+      </div>
+    );
   }
+
+  // Retries exhausted and still no answer. Say what actually happened — "please sign in"
+  // would be a lie, and the user would waste time re-entering a password that was never
+  // the problem.
+  if (!user && unreachable) {
+    return (
+      <div className="p-10">
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          Can&apos;t reach the server.
+        </p>
+        <p className="mt-1 text-sm text-zinc-500">
+          You are still signed in — the backend isn&apos;t responding. It may be restarting.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
   if (!user) return null; // redirect already in flight
 
   const initial = user.email[0]?.toUpperCase() ?? "?";
