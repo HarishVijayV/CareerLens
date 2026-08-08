@@ -117,6 +117,28 @@ export interface GmailStatus {
   message?: string;
 }
 
+export interface ResumeVersion {
+  id: string;
+  label: string;
+  source_format: string;
+  origin: string;
+  is_active: boolean;
+  has_latex: boolean;
+  tailored_for_posting_id: string | null;
+  change_summary: string | null;
+  created_at: string;
+  preview: string;
+}
+
+export interface ActiveResume {
+  exists: boolean;
+  id?: string;
+  label?: string;
+  content_text: string;
+  content_latex: string | null;
+  source_format?: string;
+}
+
 export const api = {
   // ---- auth ----
   signup: (email: string, password: string) =>
@@ -153,6 +175,36 @@ export const api = {
   syncInbox: () => request<{ queued: boolean; task_id: string }>("/applications/sync-inbox", { method: "POST" }),
   gmailStatus: () => request<GmailStatus>("/auth/google/status"),
   gmailConnect: () => request<{ authorization_url: string }>("/auth/google/connect"),
+
+  // ---- resume ----
+  getActiveResume: () => request<ActiveResume>("/resume/active"),
+  listResumeVersions: () => request<ResumeVersion[]>("/resume/versions"),
+  saveResume: (content_text: string, content_latex: string | null, label?: string) =>
+    request<ResumeVersion>("/resume/save", {
+      method: "POST",
+      body: JSON.stringify({ content_text, content_latex, label }),
+    }),
+  activateResumeVersion: (id: string) =>
+    request<ResumeVersion>(`/resume/versions/${id}/activate`, { method: "POST" }),
+
+  uploadResume: async (file: File): Promise<ResumeVersion> => {
+    const form = new FormData();
+    form.append("file", file);
+    // No Content-Type header on purpose: the browser must set it itself so it can add
+    // the multipart boundary. Setting it manually is the classic broken-upload bug.
+    const res = await fetch(`${API_BASE_URL}/resume/upload`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : "Upload failed");
+    }
+    return res.json();
+  },
+
+  downloadResumeUrl: (fmt: "tex" | "txt" | "pdf") => `${API_BASE_URL}/resume/download?fmt=${fmt}`,
 
   // ---- agents ----
   listAgents: () =>

@@ -84,7 +84,31 @@ python run_pipeline.py --benchmark      # include the MapReduce vs Spark compari
 
 ---
 
-## Step 5 — LATER (not now): Gmail integration
+## Step 5 — Upload your resume (1 min, no credentials needed)
+
+Open **http://localhost:3000/resume** and upload your resume.
+
+**Upload the `.tex` file if you have it.** That's the format where the whole loop works:
+
+    upload .tex -> ask the assistant to rewrite it -> download a compiled .pdf
+
+PDF upload works too, but it's one-way: text can be pulled out of a PDF, but there's no
+route back to a formatted PDF from that text. `.docx` and `.txt` also work.
+
+No Google account, no API key, no OAuth — resume upload talks only to your own backend.
+
+What you can do there:
+- Edit in the browser (plain-text tab, or the LaTeX tab if you uploaded .tex)
+- Chat with the resume assistant: "convert my resume to LaTeX", "rewrite my bullets to
+  emphasise data engineering", "tailor this for posting P000177873"
+- Download `.txt`, `.tex`, or a real compiled `.pdf`
+- Restore any previous version — every save is kept, nothing is overwritten
+
+*(The chat needs your LLM key from Step 1. Upload, edit and download work without it.)*
+
+---
+
+## Step 6 — LATER (not now): Gmail integration
 
 Only needed for the email-tracking feature, which is Phase 6 in `docs/ROADMAP.md` and not
 built yet. When you get there: Google Cloud Console → create OAuth credentials → enable

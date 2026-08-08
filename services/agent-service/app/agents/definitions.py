@@ -61,14 +61,37 @@ GET_RESUME_TOOL = {
     },
 }
 
+GET_RESUME_LATEX_TOOL = {
+    "name": "get_resume_latex",
+    "description": (
+        "Fetch the LaTeX source of the user's active resume. Call this before editing if "
+        "you intend to produce LaTeX — editing the real source preserves their formatting."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {"user_id": {"type": "string"}},
+        "required": ["user_id"],
+    },
+}
+
 SAVE_RESUME_TOOL = {
     "name": "save_tailored_resume",
-    "description": "Save a rewritten resume to the user's profile. Only call this once you have a final version.",
+    "description": (
+        "Save a rewritten resume as a NEW version (never overwrites). Call once, with the "
+        "complete final document — not a fragment or a diff."
+    ),
     "input_schema": {
         "type": "object",
         "properties": {
             "user_id": {"type": "string"},
-            "resume_text": {"type": "string", "description": "the complete rewritten resume"},
+            "resume_text": {"type": "string", "description": "complete rewritten resume, plain text"},
+            "resume_latex": {
+                "type": "string",
+                "description": "complete LaTeX source, if the user has a LaTeX resume or asked for LaTeX",
+            },
+            "label": {"type": "string", "description": "short name, e.g. 'tailored-acme-data-eng'"},
+            "change_summary": {"type": "string", "description": "one or two lines on what changed and why"},
+            "tailored_for_posting_id": {"type": "string"},
         },
         "required": ["user_id", "resume_text"],
     },
@@ -129,20 +152,29 @@ AGENTS = {
         ),
     },
     "resume_tailor": {
-        "description": "Rewrites the user's resume for one specific job.",
-        "tools": [GET_RESUME_TOOL, GET_JOB_TOOL, SAVE_RESUME_TOOL],
+        "description": "Edits, rewrites, tailors or converts the user's resume — including LaTeX.",
+        "tools": [GET_RESUME_TOOL, GET_RESUME_LATEX_TOOL, GET_JOB_TOOL, SAVE_RESUME_TOOL],
         "system_prompt": (
-            "You tailor a resume to one specific job posting.\n"
-            "Steps: call get_resume for the current resume, call get_job for the target "
-            "role's real requirements, then rewrite.\n"
-            "RULES — these matter more than style:\n"
-            "1. Never invent experience, employers, dates, or metrics. Rephrase and "
-            "reprioritize what is already there; a resume that lies is worse than a weak one.\n"
-            "2. Mirror the posting's terminology where it honestly applies (many companies "
-            "filter on keywords).\n"
-            "3. Lead with the bullets most relevant to THIS job.\n"
-            "Call save_tailored_resume once, with the final full text, then summarize what "
-            "you changed and why."
+            "You are the user's resume editor. You can rewrite it, tailor it to a specific "
+            "job, restructure sections, or convert it to LaTeX.\n\n"
+            "WORKFLOW\n"
+            "1. Always call get_resume first — never assume what it says.\n"
+            "2. If the user mentions LaTeX, or asks for a downloadable/compilable file, also "
+            "call get_resume_latex. When LaTeX source exists, EDIT THAT SOURCE and return it "
+            "in resume_latex — that preserves their formatting and produces a document they "
+            "can actually compile and send.\n"
+            "3. If they name a job, call get_job for its real requirements.\n"
+            "4. Call save_tailored_resume ONCE with the complete final document.\n\n"
+            "HARD RULES — these outrank style:\n"
+            "* NEVER invent experience, employers, dates, degrees, or metrics. Rephrase and "
+            "reprioritize what is already there. A resume that lies is worse than a weak one, "
+            "and the person has to defend every line of it in an interview.\n"
+            "* Never drop real content unless asked. Reordering is fine; silent deletion is not.\n"
+            "* Mirror the posting's terminology only where it HONESTLY applies.\n"
+            "* If asked to convert to LaTeX, produce a complete compilable document "
+            "(\\documentclass through \\end{document}) using only standard packages — "
+            "article/geometry/enumitem/hyperref. Exotic packages may not be installed.\n\n"
+            "Afterwards, tell the user plainly what you changed and why."
         ),
     },
     "market_analyst": {

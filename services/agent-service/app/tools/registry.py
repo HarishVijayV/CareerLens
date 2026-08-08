@@ -93,16 +93,62 @@ def get_resume(user_id: str) -> str:
     )
 
 
-def save_tailored_resume(user_id: str, resume_text: str) -> str:
-    """Persist a rewritten resume back to the user's profile."""
-    resp = httpx.patch(
-        f"{AUTH_SERVICE_URL}/profile",
-        json={"resume_text": resume_text},
+def get_resume_latex(user_id: str) -> str:
+    """Fetch the LaTeX source of the active resume, if there is one."""
+    resp = httpx.get(
+        f"{AUTH_SERVICE_URL}/resume/active",
         headers={"X-User-Id": user_id, "X-Internal-Call": "agent-service"},
         timeout=_TIMEOUT,
     )
     resp.raise_for_status()
-    return json.dumps({"saved": True, "characters": len(resume_text)})
+    active = resp.json()
+
+    if not active.get("content_latex"):
+        return json.dumps(
+            {
+                "has_latex": False,
+                "note": "No LaTeX source. Editing plain text only; a .tex upload (or a "
+                "convert-to-LaTeX step) is needed before a compilable document exists.",
+            }
+        )
+    return json.dumps({"has_latex": True, "latex": active["content_latex"]})
+
+
+def save_tailored_resume(
+    user_id: str,
+    resume_text: str,
+    label: str | None = None,
+    resume_latex: str | None = None,
+    change_summary: str | None = None,
+    tailored_for_posting_id: str | None = None,
+) -> str:
+    """Save a rewritten resume as a NEW version.
+
+    Never an in-place overwrite: the previous version stays intact and restorable, which
+    is what makes letting a model edit your resume a safe thing to do at all.
+    """
+    resp = httpx.post(
+        f"{AUTH_SERVICE_URL}/resume/agent-save",
+        json={
+            "content_text": resume_text,
+            "content_latex": resume_latex,
+            "label": label,
+            "change_summary": change_summary,
+            "tailored_for_posting_id": tailored_for_posting_id,
+        },
+        headers={"X-User-Id": user_id, "X-Internal-Call": "agent-service"},
+        timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+    saved = resp.json()
+    return json.dumps(
+        {
+            "saved": True,
+            "version_id": saved.get("id"),
+            "label": saved.get("label"),
+            "characters": len(resume_text),
+        }
+    )
 
 
 # ------------------------------------------------------------------------------ dispatch
@@ -112,6 +158,7 @@ TOOL_IMPLEMENTATIONS = {
     "get_market_analytics": get_market_analytics,
     "get_profile": get_profile,
     "get_resume": get_resume,
+    "get_resume_latex": get_resume_latex,
     "save_tailored_resume": save_tailored_resume,
 }
 

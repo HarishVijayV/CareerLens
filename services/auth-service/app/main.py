@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.db import Base, engine
-from app.routers import applications, auth, google_oauth, profile
+from app.routers import applications, auth, google_oauth, profile, resume
 
 
 @asynccontextmanager
@@ -27,6 +27,7 @@ app.include_router(auth.router)
 app.include_router(profile.router)
 app.include_router(google_oauth.router)
 app.include_router(applications.router)
+app.include_router(resume.router)
 
 
 @app.get("/health")

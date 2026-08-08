@@ -18,6 +18,7 @@ _SERVICE_MAP = {
     # database with identity, and splitting them would turn a join into a network call.
     "profile": (settings.auth_service_url, "/profile"),
     "applications": (settings.auth_service_url, "/applications"),
+    "resume": (settings.auth_service_url, "/resume"),
     "agents": (settings.agent_service_url, "/agents"),
     "jobs": (settings.jobs_service_url, "/jobs"),
     "analytics": (settings.jobs_service_url, "/analytics"),

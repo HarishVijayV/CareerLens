@@ -94,6 +94,45 @@ class UserProfile(Base):
         return [term.strip() for term in raw.split(",") if term.strip()]
 
 
+class ResumeVersion(Base):
+    """Every saved state of a resume, kept rather than overwritten.
+
+    Versioning is not a nicety here — it's what makes the whole feature safe and
+    measurable:
+      * safety — an AI rewrite can never destroy the original; you can always go back
+      * measurement — Application.resume_version points at one of these rows, so
+        "which version got more replies" becomes a real query instead of a guess
+
+    Both `content_text` and `content_latex` are stored. LaTeX is the source of truth when
+    present (it's what compiles to the PDF you send); the plain text is what the agents
+    reason over, because feeding LaTeX markup to an LLM wastes tokens on syntax and
+    invites it to mangle the formatting.
+    """
+
+    __tablename__ = "resume_versions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+
+    label: Mapped[str] = mapped_column(String, nullable=False)  # "v1-original", "tailored-acme"
+    content_text: Mapped[str] = mapped_column(Text, default="")
+    content_latex: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # tex | pdf | docx | txt — what was originally uploaded
+    source_format: Mapped[str] = mapped_column(String, default="txt")
+    # upload | ai_tailored | manual_edit
+    origin: Mapped[str] = mapped_column(String, default="upload")
+
+    # set when an agent produced this version, so provenance is never ambiguous
+    tailored_for_posting_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    change_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    user: Mapped["User"] = relationship()
+
+
 class GoogleCredential(Base):
     """Google OAuth tokens for Gmail access.
 
