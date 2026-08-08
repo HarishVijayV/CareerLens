@@ -105,6 +105,19 @@ services:
     volumes:
       - ../services/agent-service/app:/app/app
 
+  jobs-service:
+    build: ../services/jobs-service
+    env_file: .env
+    ports:
+      - "${JOBS_SERVICE_PORT:-8003}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../services/jobs-service/app:/app/app
+
   worker-service:
     build: ../services/worker-service
     env_file: .env

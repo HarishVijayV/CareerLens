@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # downstream service base URLs (Docker Compose service names resolve on the shared network)
     auth_service_url: str = "http://auth-service:8000"
     agent_service_url: str = "http://agent-service:8000"
+    jobs_service_url: str = "http://jobs-service:8000"
     notification_service_url: str = "http://notification-service:8000"
 
     rate_limit_requests: int = 60
