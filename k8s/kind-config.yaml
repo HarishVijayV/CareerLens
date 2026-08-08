@@ -37,3 +37,23 @@ nodes:
 
   - role: worker
   - role: worker
+
+# ---------------------------------------------------------------------------
+# AFTER creating the cluster, install the ingress controller AND pin it to the
+# control-plane — the extraPortMappings above only exist on that node, so a
+# controller scheduled onto a worker is unreachable from the host. Hit this for
+# real: every pod healthy, Ingress showing an address, and curl returning
+# nothing, because the controller was listening on a node with no host ports.
+#
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+#
+#   kubectl patch deployment ingress-nginx-controller -n ingress-nginx --type=strategic -p '{
+#     "spec":{"template":{"spec":{
+#       "nodeSelector":{"ingress-ready":"true","kubernetes.io/os":"linux"},
+#       "tolerations":[
+#         {"key":"node-role.kubernetes.io/control-plane","operator":"Equal","effect":"NoSchedule"}
+#       ]}}}}'
+#
+# The toleration is required because control-plane nodes carry a NoSchedule taint
+# by default; the nodeSelector alone would leave the pod Pending forever.
+# ---------------------------------------------------------------------------
