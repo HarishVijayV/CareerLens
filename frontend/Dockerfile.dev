@@ -17,7 +17,16 @@ COPY . .
 
 EXPOSE 3000
 
-# -H 0.0.0.0 is required in a container: Next binds to localhost by default, which inside
-# a container means the container's own loopback, and the port mapping would appear to do
-# nothing from the host.
-CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0"]
+# Two flags, both load-bearing in a container:
+#
+# -H 0.0.0.0   Next binds to localhost by default, which inside a container means the
+#              container's OWN loopback — the port mapping then appears to do nothing.
+#
+# --webpack    Turbopack (the Next 16 default) relies on native filesystem events, and
+#              those don't cross a Windows/macOS Docker bind mount. Edits landed in the
+#              container but never triggered a recompile, so the page silently served
+#              stale content until a manual restart — the worst kind of "broken", because
+#              nothing errors. Webpack honours WATCHPACK_POLLING (set in compose), which
+#              polls instead of waiting for events. Slower to compile, but hot reload
+#              actually works, which matters far more in development.
+CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0", "--webpack"]

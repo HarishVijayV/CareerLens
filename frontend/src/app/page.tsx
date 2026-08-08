@@ -86,7 +86,7 @@ export default function HomePage() {
         <div className="relative mx-auto max-w-6xl px-6 py-20 sm:py-28">
           <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
             <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-            Distributed pipeline · multi-agent AI · running locally
+            Distributed pipeline · multi-agent AI · production-shaped
           </p>
 
           <h1 className="max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
