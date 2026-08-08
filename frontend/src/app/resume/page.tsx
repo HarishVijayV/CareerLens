@@ -20,13 +20,17 @@ const QUICK_ASKS = [
 export default function ResumePage() {
   const [active, setActive] = useState<ActiveResume | null>(null);
   const [versions, setVersions] = useState<ResumeVersion[]>([]);
-  const [tab, setTab] = useState<"text" | "latex">("text");
+  const [tab, setTab] = useState<"text" | "latex" | "preview">("text");
   const [draftText, setDraftText] = useState("");
   const [draftLatex, setDraftLatex] = useState("");
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const [chat, setChat] = useState<ChatTurn[]>([]);
   const [message, setMessage] = useState("");
@@ -40,7 +44,15 @@ export default function ResumePage() {
     setDraftText(a.content_text ?? "");
     setDraftLatex(a.content_latex ?? "");
     setDirty(false);
-    if (a.content_latex) setTab("latex");
+
+    // Drop any cached PDF — the active version just changed (upload, save, agent edit or
+    // restore), so a stale render would be showing the wrong document entirely.
+    setPdfUrl((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return null;
+    });
+
+    setTab((current) => (current === "preview" ? "preview" : a.content_latex ? "latex" : "text"));
   }, []);
 
   useEffect(() => {
@@ -106,10 +118,55 @@ export default function ResumePage() {
   }
 
   function download(fmt: "tex" | "txt" | "pdf") {
+    if (fmt === "pdf") {
+      // Reuse the already-fetched blob if we have one, so clicking Download right after
+      // a preview doesn't recompile the PDF server-side for no reason.
+      if (pdfUrl) {
+        const a = document.createElement("a");
+        a.href = pdfUrl;
+        a.download = "resume.pdf";
+        a.click();
+        return;
+      }
+      api
+        .previewResumePdf()
+        .then((url) => {
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "resume.pdf";
+          a.click();
+        })
+        .catch((e) => setError(e.message));
+      return;
+    }
     window.open(api.downloadResumeUrl(fmt), "_blank");
   }
 
+  const refreshPreview = useCallback(async () => {
+    setPreviewing(true);
+    setPreviewError(null);
+    try {
+      const url = await api.previewResumePdf();
+      // Release the previous blob � without this every recompile leaks a few hundred KB
+      // that the browser holds until the tab closes.
+      setPdfUrl((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return url;
+      });
+    } catch (e) {
+      setPreviewError(e instanceof ApiError ? e.message : "Could not render PDF");
+    } finally {
+      setPreviewing(false);
+    }
+  }, []);
+
   const hasLatex = Boolean(draftLatex);
+
+  // Render on first switch to the preview tab, not on every keystroke — compiling LaTeX
+  // is a real server-side cost, so it's an explicit "Re-render" action after that.
+  useEffect(() => {
+    if (tab === "preview" && !pdfUrl && hasLatex) refreshPreview();
+  }, [tab, pdfUrl, hasLatex, refreshPreview]);
 
   return (
     <AppShell>
@@ -183,44 +240,79 @@ export default function ResumePage() {
         <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
             <div className="flex gap-1">
-              {(["text", "latex"] as const).map((t) => (
+              {(["text", "latex", "preview"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
-                  disabled={t === "latex" && !hasLatex}
+                  disabled={t !== "text" && !hasLatex}
+                  title={t !== "text" && !hasLatex ? "Needs a LaTeX version" : ""}
                   className={`rounded px-3 py-1 text-xs disabled:opacity-40 ${
                     tab === t
                       ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
                       : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
                   }`}
                 >
-                  {t === "text" ? "Plain text" : "LaTeX"}
+                  {t === "text" ? "Plain text" : t === "latex" ? "LaTeX" : "PDF preview"}
                 </button>
               ))}
             </div>
-            <button
-              onClick={handleSave}
-              disabled={busy || !dirty}
-              className="rounded bg-zinc-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
-            >
-              {dirty ? "Save as new version" : "Saved"}
-            </button>
+
+            <div className="flex gap-2">
+              {tab === "preview" && (
+                <button
+                  onClick={refreshPreview}
+                  disabled={previewing}
+                  className="rounded border border-zinc-300 px-3 py-1 text-xs disabled:opacity-40 dark:border-zinc-700"
+                >
+                  {previewing ? "Rendering…" : "Re-render"}
+                </button>
+              )}
+              <button
+                onClick={handleSave}
+                disabled={busy || !dirty}
+                className="rounded bg-zinc-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
+              >
+                {dirty ? "Save as new version" : "Saved"}
+              </button>
+            </div>
           </div>
 
-          <textarea
-            value={tab === "text" ? draftText : draftLatex}
-            onChange={(e) => {
-              tab === "text" ? setDraftText(e.target.value) : setDraftLatex(e.target.value);
-              setDirty(true);
-            }}
-            placeholder={
-              active?.exists
-                ? ""
-                : "Upload a file, paste your resume here, or ask the assistant to help you write one."
-            }
-            className="h-[520px] w-full resize-y bg-transparent p-4 font-mono text-xs outline-none"
-            spellCheck={false}
-          />
+          {tab === "preview" ? (
+            <div className="h-[520px] p-2">
+              {previewError ? (
+                <div className="p-4 text-xs text-red-600">
+                  {previewError}
+                  <p className="mt-2 text-zinc-500">
+                    LaTeX compile errors usually mean an unsupported package. The assistant is
+                    told to stick to article/geometry/enumitem/hyperref — ask it to simplify
+                    the preamble.
+                  </p>
+                </div>
+              ) : previewing && !pdfUrl ? (
+                <p className="p-4 text-xs text-zinc-500">Compiling LaTeX…</p>
+              ) : pdfUrl ? (
+                <iframe src={pdfUrl} className="h-full w-full rounded" title="Resume PDF preview" />
+              ) : (
+                <p className="p-4 text-xs text-zinc-500">Nothing rendered yet.</p>
+              )}
+            </div>
+          ) : (
+            <textarea
+              value={tab === "text" ? draftText : draftLatex}
+              onChange={(e) => {
+                if (tab === "text") setDraftText(e.target.value);
+                else setDraftLatex(e.target.value);
+                setDirty(true);
+              }}
+              placeholder={
+                active?.exists
+                  ? ""
+                  : "Upload a file, paste your resume here, or ask the assistant to help you write one."
+              }
+              className="h-[520px] w-full resize-y bg-transparent p-4 font-mono text-xs outline-none"
+              spellCheck={false}
+            />
+          )}
         </section>
 
         {/* ---------- assistant + versions ---------- */}

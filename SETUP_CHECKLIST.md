@@ -59,12 +59,13 @@ needed).
 Everything below is already running on your machine right now.
 
 ```bash
-# if the containers aren't up:
 cd infra && docker compose up -d
-
-# the frontend:
-cd frontend && npm run dev
 ```
+
+**That's the only command.** It brings up everything — database, cache, Kafka, all six
+backend services, and the frontend. Every container is set to `restart: unless-stopped`,
+so once Docker Desktop starts, the whole stack comes back on its own and you don't need
+to run anything at all.
 
 Then open **http://localhost:3000**, sign up with any email/password (min 8 chars), and
 click through: Dashboard → Jobs → Analytics → Copilot → Profile.
@@ -104,6 +105,7 @@ What you can do there:
 - Edit in the browser (plain-text tab, or the LaTeX tab if you uploaded .tex)
 - Chat with the resume assistant: "convert my resume to LaTeX", "rewrite my bullets to
   emphasise data engineering", "tailor this for posting P000177873"
+- **PDF preview tab** — see the compiled document rendered in the page, next to the editor
 - Download `.txt`, `.tex`, or a real compiled `.pdf`
 - Restore any previous version — every save is kept, nothing is overwritten
 

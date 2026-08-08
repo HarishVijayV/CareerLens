@@ -206,6 +206,22 @@ export const api = {
 
   downloadResumeUrl: (fmt: "tex" | "txt" | "pdf") => `${API_BASE_URL}/resume/download?fmt=${fmt}`,
 
+  /** Fetch the compiled PDF as a blob URL for in-page preview.
+   *  A plain <iframe src="/resume/download?fmt=pdf"> would NOT work: the iframe request
+   *  is a top-level navigation the browser makes without our credentials:"include"
+   *  setting, so the auth cookie wouldn't be attached and the gateway would 401. Fetching
+   *  it ourselves and handing the iframe a blob: URL keeps the request authenticated. */
+  previewResumePdf: async (): Promise<string> => {
+    const res = await fetch(`${API_BASE_URL}/resume/download?fmt=pdf`, {
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : "Preview failed");
+    }
+    return URL.createObjectURL(await res.blob());
+  },
+
   // ---- agents ----
   listAgents: () =>
     request<Record<string, { description: string; tools: string[] }>>("/agents"),

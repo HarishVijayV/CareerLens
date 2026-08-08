@@ -1,0 +1,23 @@
+# Development image: runs `next dev` with hot reload, so editing a file on the host
+# updates the browser without a rebuild.
+#
+# Separate from the production Dockerfile on purpose — that one runs `next build` and
+# bakes the output in, which is right for shipping and wrong for development (every edit
+# would mean rebuilding the image).
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy manifests first so `npm ci` is cached and only re-runs when dependencies actually
+# change — not on every source edit.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+EXPOSE 3000
+
+# -H 0.0.0.0 is required in a container: Next binds to localhost by default, which inside
+# a container means the container's own loopback, and the port mapping would appear to do
+# nothing from the host.
+CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0"]

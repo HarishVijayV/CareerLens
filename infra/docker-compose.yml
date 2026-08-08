@@ -14,6 +14,7 @@
 services:
   # ---------------------------------------------------------------- core infra
   postgres:
+    restart: unless-stopped
     image: postgres:16-alpine
     env_file: .env
     environment:
@@ -31,6 +32,7 @@ services:
       retries: 10
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -50,6 +52,7 @@ services:
   # pull entirely. Worth knowing as a general lesson — pinning an image tag doesn't
   # protect you if the publisher withdraws the repository.
   kafka:
+    restart: unless-stopped
     image: apache/kafka:3.8.1
     ports:
       - "9092:9092"
@@ -89,6 +92,7 @@ services:
       start_period: 30s
 
   adminer:
+    restart: unless-stopped
     image: adminer:latest
     ports:
       - "8081:8080"
@@ -97,6 +101,7 @@ services:
 
   # ---------------------------------------------------------------- app services
   gateway:
+    restart: unless-stopped
     build: ../services/gateway
     env_file: .env
     ports:
@@ -110,6 +115,7 @@ services:
       - ../services/gateway/app:/app/app
 
   auth-service:
+    restart: unless-stopped
     build: ../services/auth-service
     env_file: .env
     ports:
@@ -123,6 +129,7 @@ services:
       - ../services/auth-service/app:/app/app
 
   agent-service:
+    restart: unless-stopped
     build: ../services/agent-service
     env_file: .env
     ports:
@@ -136,6 +143,7 @@ services:
       - ../services/agent-service/app:/app/app
 
   jobs-service:
+    restart: unless-stopped
     build: ../services/jobs-service
     env_file: .env
     ports:
@@ -149,6 +157,7 @@ services:
       - ../services/jobs-service/app:/app/app
 
   worker-service:
+    restart: unless-stopped
     build: ../services/worker-service
     env_file: .env
     command: celery -A app.celery_app worker --loglevel=info
@@ -161,6 +170,7 @@ services:
       - ../services/worker-service/app:/app/app
 
   notification-service:
+    restart: unless-stopped
     build: ../services/notification-service
     env_file: .env
     ports:
@@ -170,6 +180,30 @@ services:
         condition: service_healthy
     volumes:
       - ../services/notification-service/app:/app/app
+
+  frontend:
+    restart: unless-stopped
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      # This URL is resolved by the BROWSER, not by this container — so it must be
+      # localhost:8000 (the host's mapped gateway port), never gateway:8000. Docker
+      # service names only resolve inside the compose network, and the browser isn't in it.
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+      WATCHPACK_POLLING: "true"   # file-change events don't cross the Windows/WSL bind mount reliably
+    depends_on:
+      - gateway
+    volumes:
+      - ../frontend/src:/app/src
+      - ../frontend/public:/app/public
+      # Anonymous volume pins the container's own node_modules. Without it the host's
+      # node_modules (built for Windows) would shadow the Linux ones installed in the
+      # image, and native binaries would fail to load.
+      - /app/node_modules
+      - /app/.next
 
   # ---------------------------------------------------------------- bigdata profile
   namenode:
