@@ -116,7 +116,8 @@ export default function ProfilePage() {
         remote_only: profile.remote_only,
         min_salary: profile.min_salary,
         seniority: profile.seniority,
-        resume_text: profile.resume_text,
+        // resume_text is deliberately NOT sent: the resume lives in resume_versions now,
+        // and sending it from here would let a stale copy overwrite the real one.
       });
       setProfile(updated);
       setSaved(true);
@@ -320,20 +321,11 @@ export default function ProfilePage() {
           </label>
         </div>
 
-        <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <label className={labelCls}>
-            Resume
-            <span className={hint}>
-              Paste your resume text. The resume-tailor agent rewrites THIS for a specific job —
-              it can rephrase and reorder, but it is instructed never to invent experience.
-            </span>
-            <textarea
-              className={`${input} min-h-48 font-mono text-xs`}
-              value={profile.resume_text ?? ""}
-              onChange={(e) => set("resume_text", e.target.value)}
-            />
-          </label>
-        </div>
+        {/* The paste-your-resume-text box that used to live here is gone. It predated
+            resume uploads and became actively harmful once they existed: it was a SECOND
+            copy of the resume, editable here, while the real versions lived on the Resume
+            page. Whichever one you edited, the other was silently stale — and the tailor
+            agent reads the uploaded version, so text pasted here did nothing at all. */}
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
