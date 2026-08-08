@@ -1,0 +1,67 @@
+#!/bin/sh
+#
+# Blocks commits containing anything that looks like a credential.
+#
+# Written because a leaked Google API key got a Cloud project suspended for "abusive
+# activity consistent with hijacking" — a third party harvested the key and used it. Once
+# a secret is in git history, deleting the file doesn't help: the old commit still has it,
+# and if it was ever pushed, assume it's compromised and rotate it.
+#
+# Enable once per clone:
+#     git config core.hooksPath .githooks
+#
+# Bypass deliberately (e.g. a documented example key):
+#     git commit --no-verify
+
+FOUND=0
+
+# Only scan what's actually STAGED — checking the working tree would flag .env and make
+# the hook useless noise on every commit.
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$STAGED" ] && exit 0
+
+check() {
+  pattern="$1"
+  label="$2"
+  for file in $STAGED; do
+    # Skip our own docs and this hook, which necessarily mention the patterns.
+    case "$file" in
+      .githooks/*|*.md|package-lock.json|*.lock) continue ;;
+    esac
+    [ -f "$file" ] || continue
+    # `-e "$pattern"` is required, not optional style: a pattern starting with "-"
+    # (like the PRIVATE KEY one) is otherwise parsed by grep as a flag.
+    if git show ":$file" 2>/dev/null | grep -qE -e "$pattern"; then
+      echo "  BLOCKED  $label  in  $file"
+      FOUND=1
+    fi
+  done
+}
+
+check 'AIza[0-9A-Za-z_-]{30,}'                'Google API key'
+check 'GOCSPX-[A-Za-z0-9_-]{20,}'             'Google OAuth client secret'
+check 'fw_[0-9A-Za-z]{25,}'                   'Fireworks API key'
+check 'sk-[A-Za-z0-9]{30,}'                   'OpenAI/Anthropic style key'
+check 'xox[baprs]-[0-9A-Za-z-]{20,}'          'Slack token'
+check 'AKIA[0-9A-Z]{16}'                      'AWS access key id'
+check '-----BEGIN [A-Z ]*PRIVATE KEY-----'  'Private key'
+
+# A .env should never be committed, whatever is inside it.
+for file in $STAGED; do
+  case "$file" in
+    *.env|*.env.local|*.env.production)
+      echo "  BLOCKED  environment file  $file"
+      FOUND=1
+      ;;
+  esac
+done
+
+if [ "$FOUND" -ne 0 ]; then
+  echo ""
+  echo "Commit refused: possible credentials staged."
+  echo "Unstage the file, move the value into infra/.env (gitignored), and commit again."
+  echo "If this is a false positive: git commit --no-verify"
+  exit 1
+fi
+
+exit 0
