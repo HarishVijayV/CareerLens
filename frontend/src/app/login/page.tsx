@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import AuthLayout, { buttonClass, fieldClass, labelClass } from "@/components/AuthLayout";
 import { api, ApiError } from "@/lib/api";
 
 export default function LoginPage() {
@@ -19,9 +21,9 @@ export default function LoginPage() {
       await api.login(email, password);
       router.push("/dashboard");
     } catch (err) {
-      // The Gateway/auth-service deliberately return the SAME generic message for
-      // "no such user" and "wrong password" — see docs/AUTH_AND_SECURITY.md — so this
-      // UI has nothing more specific to show even if it wanted to.
+      // The backend deliberately returns the SAME message for "no such user" and "wrong
+      // password" — see docs/AUTH_AND_SECURITY.md. Distinguishing them would let anyone
+      // enumerate which emails have accounts.
       setError(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
@@ -29,37 +31,64 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 px-6">
-      <h1 className="text-2xl font-semibold">Log in</h1>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <input
-          type="email"
-          required
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="rounded border px-3 py-2"
-        />
-        <input
-          type="password"
-          required
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="rounded border px-3 py-2"
-        />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded bg-black px-3 py-2 text-white disabled:opacity-50"
-        >
-          {loading ? "Logging in..." : "Log in"}
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Sign in to your CareerLens account."
+      footer={
+        <>
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="font-medium text-zinc-900 underline dark:text-zinc-100">
+            Sign up
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label htmlFor="email" className={labelClass}>
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={fieldClass}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="password" className={labelClass}>
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            required
+            autoComplete="current-password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={fieldClass}
+          />
+        </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300"
+          >
+            {error}
+          </div>
+        )}
+
+        <button type="submit" disabled={loading} className={buttonClass}>
+          {loading ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <p className="text-sm text-gray-600">
-        No account yet? <a href="/signup" className="underline">Sign up</a>
-      </p>
-    </main>
+    </AuthLayout>
   );
 }
