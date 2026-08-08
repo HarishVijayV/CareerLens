@@ -1,10 +1,11 @@
 /**
- * Every request goes through the Gateway (never straight to auth-service/agent-service —
- * those aren't meant to be reachable from the browser, see docs/ARCHITECTURE.md).
+ * Every request goes through the Gateway — never straight to auth-service or
+ * jobs-service, which aren't meant to be reachable from a browser at all
+ * (docs/ARCHITECTURE.md).
  *
- * `credentials: "include"` is the one line that makes cookie-based auth work at all:
- * without it, the browser won't send the httpOnly access_token/refresh_token cookies
- * cross-origin (frontend on :3000, gateway on :8000).
+ * `credentials: "include"` is the single line that makes cookie auth work: without it
+ * the browser won't send the httpOnly access_token/refresh_token cookies cross-origin
+ * (frontend on :3000, gateway on :8000).
  */
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api";
 
@@ -25,10 +26,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new ApiError(res.status, body.detail ?? "Request failed");
+    const detail =
+      typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body);
+    throw new ApiError(res.status, detail);
   }
 
-  // 204 / empty bodies (e.g. logout) — nothing to parse
   return res.status === 204 ? (undefined as T) : res.json();
 }
 
@@ -38,20 +40,83 @@ export interface User {
   role: string;
 }
 
+export interface Profile {
+  user_id: string;
+  full_name: string | null;
+  headline: string | null;
+  skills: string | null;
+  target_roles: string | null;
+  countries: string;
+  preferred_locations: string | null;
+  remote_only: boolean;
+  min_salary: number | null;
+  seniority: string | null;
+  resume_text: string | null;
+}
+
+export interface Job {
+  posting_id: string;
+  title: string;
+  company_name: string | null;
+  location: string | null;
+  region: string | null;
+  seniority: string | null;
+  remote: boolean;
+  salary: number | null;
+  posted_month: number | null;
+  required_skills?: string[];
+}
+
+export interface ToolCall {
+  tool: string;
+  arguments: Record<string, unknown>;
+  result_preview: string;
+}
+
+export interface AgentAnswer {
+  agent: string;
+  routing_reason?: string;
+  answer: string;
+  tool_calls: ToolCall[];
+  iterations: number;
+  stopped_early: boolean;
+}
+
 export const api = {
+  // ---- auth ----
   signup: (email: string, password: string) =>
     request<User>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) }),
-
   login: (email: string, password: string) =>
     request<User>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
-
   logout: () => request<void>("/auth/logout", { method: "POST" }),
-
   me: () => request<User>("/auth/me"),
 
-  extractSkills: (jobDescription: string) =>
-    request<{ result: unknown }>("/agents/orchestrator", {
+  // ---- profile ----
+  getProfile: () => request<Profile>("/profile"),
+  updateProfile: (patch: Partial<Profile>) =>
+    request<Profile>("/profile", { method: "PATCH", body: JSON.stringify(patch) }),
+
+  // ---- jobs ----
+  searchJobs: (params: Record<string, string | number | boolean | undefined>) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== "" && v !== false) query.set(k, String(v));
+    });
+    return request<{ total: number; limit: number; offset: number; jobs: Job[] }>(
+      `/jobs/search?${query}`
+    );
+  },
+  getJob: (postingId: string) => request<Job>(`/jobs/${postingId}`),
+
+  // ---- analytics ----
+  analytics: <T>(metric: string) => request<T>(`/analytics/${metric}`),
+
+  // ---- agents ----
+  listAgents: () =>
+    request<Record<string, { description: string; tools: string[] }>>("/agents"),
+  ask: (message: string, agent?: string) =>
+    request<AgentAnswer>("/agents/ask", {
       method: "POST",
-      body: JSON.stringify({ intent: "extract_skills", payload: { job_description: jobDescription } }),
+      body: JSON.stringify({ message, agent: agent || null }),
     }),
 };
