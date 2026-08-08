@@ -45,15 +45,35 @@ data engineering, backend, AI, and infrastructure — rather than a tutorial fol
 
 | What | Result |
 |---|---|
-| Rows processed | 200,000 → 195,959 after removing 4,041 duplicates |
+| Rows processed | 154,911 → **151,883** after removing 3,028 duplicates |
+| Of which real | **4,911** live postings (Adzuna India + USA); the rest generated |
 | Spark vs MapReduce | **57.1% faster (2.33×)** — median of 3 runs each, same aggregation |
-| ML model | GBT R² = 0.911 vs LinearRegression baseline R² = 0.178 |
-| Warehouse | 195,959 postings + 980,447 skill rows |
+| ML model | GBT R² = **0.898** vs LinearRegression baseline R² = **0.865** |
+| Warehouse | 151,883 postings + **737,525** skill rows |
 | Data quality | 17/17 dbt tests passing |
 | Tests | 33 Python tests |
 | Kubernetes | 14/14 pods, self-healing verified by killing a pod mid-request |
 
 Raw output committed in `pipeline/data/*.json` — you can reproduce every number.
+
+**Read the model result honestly, because an interviewer will.** GBT beats the linear
+baseline, but only 0.898 vs 0.865 — and the feature importances explain why:
+
+```
+seniority_idx  0.9637     <- the model is essentially "what level is this role?"
+region_idx     0.0330
+skill_count    0.0031
+remote_int     0.0002
+```
+
+96% of the model is seniority. That is not a flaw in the model; it is the truth about the
+data. Most rows are synthetic, and the generator derives salary almost entirely from
+seniority — so the model correctly recovered the generator. The right claim is *"I built,
+evaluated and shipped a batch-scoring model end to end"*, not *"I can predict salaries."*
+Claiming the latter collapses under one follow-up question.
+
+The benchmark numbers come from a separate 200,000-row run recorded in
+`benchmark_results.json`; the counts above are the current pipeline.
 
 ---
 
@@ -95,7 +115,7 @@ stop an LLM hallucinating numbers" — you don't let it near unvalidated data.
 
 | Tech | What it is | Why it's here | How it's used |
 |---|---|---|---|
-| **PySpark** | Distributed data processing | Processes more data than one machine's RAM holds; partitions work across cores/nodes | `pipeline/spark_jobs/etl_clean_jobs.py` — dedupe, clean salaries, aggregate 200K rows |
+| **PySpark** | Distributed data processing | Processes more data than one machine's RAM holds; partitions work across cores/nodes | `pipeline/spark_jobs/etl_clean_jobs.py` — dedupe, clean salaries, aggregate ~152K rows |
 | **Hadoop / MapReduce** | The older distributed model | To *prove* why Spark won, with a measured benchmark rather than a claim | `pipeline/mapreduce_demo/` — same aggregation both ways, timed |
 | **Spark MLlib** | ML on Spark | Scores every posting against what its role typically pays | `mllib_salary_model.py` — GBT + a LinearRegression baseline |
 | **Kafka** | Event streaming | Fan-out: one `posting.discovered` event, several independent consumers | `pipeline/events.py` produces; `worker-service/app/consumers/` consumes |
@@ -107,8 +127,9 @@ stop an LLM hallucinating numbers" — you don't let it near unvalidated data.
 
 **Why both real AND synthetic data:** free job APIs return thousands of postings, not
 millions. Sites with millions either charge or forbid scraping. So **real data provides
-the messiness** (missing fields, inconsistent formats) and **synthetic data provides the
-scale**. Both go through the identical ETL.
+the messiness** (missing fields, mixed currencies, monthly salaries in an annual field)
+and **synthetic data provides the scale**. Both go through the identical ETL — one glob,
+one cleaning path, no per-source branching. Full accounting in [§5a](#5a-where-every-row-comes-from--real-vs-generated).
 
 ### Backend
 
@@ -312,11 +333,12 @@ here is streaming — Kafka carries `posting.discovered` events for fan-out, not
 whether that's allowed and runs it. "The model requests, your code decides" is the whole
 of agent security.
 
-### The five agents and their permissions
+### The six agents and their permissions
 
 | Agent | Tools it may call | Notably cannot |
 |---|---|---|
 | `skill_extractor` | none (pure extraction) | — |
+| `profile_extractor` | none (given resume text) | **write the profile it describes** |
 | `job_matcher` | `get_profile`, `search_jobs`, `get_job` | write anything |
 | `resume_tailor` | `get_resume`, `get_resume_latex`, `get_job`, `save_tailored_resume` | read email |
 | `market_analyst` | `get_market_analytics`, `search_jobs` | see personal data |
@@ -324,6 +346,28 @@ of agent security.
 
 Least privilege is enforced **at execution time**, not just in the prompt — restricting
 what a model *sees* is a soft boundary; checking again when the tool runs is the hard one.
+
+### Routing vs orchestration — and how the mode is chosen
+
+There are three ways a question gets answered, in increasing cost:
+
+1. **Explicit** — the caller names the agent. Zero routing cost. Used where the UI already
+   knows the intent (a "Tailor my resume" button is not ambiguous).
+2. **Routing** — a planner reads the question and picks ONE specialist. Cheap, but it can
+   only ever produce what a single agent can produce.
+3. **Orchestration** — the orchestrator calls SEVERAL sub-agents *as tools* and writes one
+   combined answer.
+
+**The planner chooses between 2 and 3 itself.** That matters: before it could, "match jobs
+to my resume and give me the top 3 fixes" went to `job_matcher` alone, which produced
+something plausible — half an answer wearing a whole answer's clothes, which is exactly
+what made the gap hard to notice. Measured on that question: 1 agent and 19 tool calls
+before, 2 agents and 3 tool calls after.
+
+Sub-agents are exposed **as tools**, which is why no new machinery was needed: an agent
+that can call tools can call other agents, because from its point of view a sub-agent is
+just a tool that happens to be expensive and intelligent. The same loop in `agents/base.py`
+drives both levels. Ceiling of 4 delegations, since each one is a full nested LLM loop.
 
 ### Why agents make cost matter
 
@@ -592,17 +636,35 @@ secret. It already does `helm rollback` on failure.
 
 ## 11. Real bugs and what they taught
 
-Full list in [docs/LESSONS.md](docs/LESSONS.md) — 16 real bugs. The best five:
+Full list in [docs/LESSONS.md](docs/LESSONS.md). The best nine:
 
-1. **Gateway let anyone impersonate anyone.** It forwarded client-supplied `X-User-Id`.
+1. **`clean_salary()` inflated every fractional salary 10–100×.** It stripped all
+   non-digits, so `160000.0` became `1600000`. Invisible for months because the synthetic
+   generator only ever emitted whole numbers; the first real converted value made average
+   US salary read **$10,186,234**. → ***A transformation that is correct for all current
+   inputs is not the same as a correct transformation.***
+2. **Real job data never actually loaded.** `job_apis.py` read Adzuna keys via `os.getenv`
+   but nothing loaded `infra/.env` outside Docker, so it printed `adzuna: SKIPPED` and fell
+   back to synthetic. → *A failure message that reads like a configuration choice will not
+   be investigated. Say "skipped because X was empty", not "skipped".*
+3. **A comment claimed work that was never implemented.** "the ETL extracts skills from
+   text" — it didn't, so every real posting reached the warehouse with an empty skill list,
+   silently breaking job matching. → *Comments describing behaviour rot silently; only
+   tests and assertions can't lie.*
+4. **Any backend blip signed the user out.** The session check was
+   `.catch(() => router.push("/login"))`, which caught network errors and 5xx as well as
+   401s. Verified: with a valid cookie, `/api/auth/me` returns 500 while auth-service
+   restarts — indistinguishable from "logged out" to that catch. → *Distinguish "the server
+   said no" from "the server said nothing." Only the first is an auth failure.*
+5. **Gateway let anyone impersonate anyone.** It forwarded client-supplied `X-User-Id`.
    → *If a value is trusted downstream, the boundary producing it must destroy any client copy.*
-2. **Only one of two auth cookies survived login.** `dict(headers)` collapsed duplicate
+6. **Only one of two auth cookies survived login.** `dict(headers)` collapsed duplicate
    `Set-Cookie`. → *HTTP headers are a multimap, not a map.*
-3. **Pipeline worked once, broke on every re-run.** dbt views depended on tables being
+7. **Pipeline worked once, broke on every re-run.** dbt views depended on tables being
    replaced. → ***A pipeline that hasn't been run twice hasn't been tested.***
-4. **MCP publisher reported success while the topic stayed empty.** `send()` is async and
+8. **MCP publisher reported success while the topic stayed empty.** `send()` is async and
    nothing awaited the future. → *A publisher that lies about delivery is worse than none.*
-5. **Frontend "Running" and "Ready" but serving nothing in k8s.** No `/health` route, so
+9. **Frontend "Running" and "Ready" but serving nothing in k8s.** No `/health` route, so
    readiness failed forever and the Service had zero endpoints. → *`kubectl get endpoints`
    is the fastest way to tell a probe failure from an app bug.*
 
@@ -639,10 +701,17 @@ Being able to say why something is absent is as valuable as building it.
 > results to disk between every stage; Spark keeps them in memory across a DAG. I
 > implemented the same aggregation both ways and measured 2.33×.
 
-**"Is 200,000 rows big data?"**
+**"Is 152,000 rows big data?"**
 > No, and I wouldn't claim it. It's the volume that fits on a laptop while exercising
 > genuinely distributed code paths. The same job runs unchanged on a cluster — only the
 > master URL changes. I'd rather quote a number I measured.
+
+**"Only 4,911 of those are real. Isn't the rest padding?"**
+> It's padding with a purpose, and I'd say so before you asked. Free job APIs cap out in
+> the thousands, and 5,000 rows doesn't justify Spark — pandas would do. The generated
+> rows exist so the distributed path runs at a size where it's the right tool. The real
+> rows are what the product actually surfaces: they sort first, they carry an apply link,
+> and they're the ones that exposed three bugs the clean synthetic data never could.
 
 **"How do you stop the AI hallucinating numbers?"**
 > Structurally. Agents can only read curated data that passed dbt's tests, they can only
