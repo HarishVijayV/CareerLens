@@ -48,7 +48,7 @@ data engineering, backend, AI, and infrastructure — rather than a tutorial fol
 | Rows processed | 154,911 → **151,883** after removing 3,028 duplicates |
 | Of which real | **4,911** live postings (Adzuna India + USA); the rest generated |
 | Spark vs MapReduce | **57.1% faster (2.33×)** — median of 3 runs each, same aggregation |
-| ML model | GBT R² = **0.898** vs LinearRegression baseline R² = **0.865** |
+| ML model | trained on REAL postings only: GBT R² = **0.617** vs linear baseline **0.475** |
 | Warehouse | 151,883 postings + **737,525** skill rows |
 | Data quality | 17/17 dbt tests passing |
 | Tests | 33 Python tests |
@@ -56,21 +56,37 @@ data engineering, backend, AI, and infrastructure — rather than a tutorial fol
 
 Raw output committed in `pipeline/data/*.json` — you can reproduce every number.
 
-**Read the model result honestly, because an interviewer will.** GBT beats the linear
-baseline, but only 0.898 vs 0.865 — and the feature importances explain why:
+**Why the model trains on real data only — and why a LOWER score is the better result.**
+
+Trained on all 151,883 rows it scored R²=0.898, which looked excellent and meant nothing:
 
 ```
-seniority_idx  0.9637     <- the model is essentially "what level is this role?"
+seniority_idx  0.9637     <- 96% of the model
 region_idx     0.0330
 skill_count    0.0031
-remote_int     0.0002
 ```
 
-96% of the model is seniority. That is not a flaw in the model; it is the truth about the
-data. Most rows are synthetic, and the generator derives salary almost entirely from
-seniority — so the model correctly recovered the generator. The right claim is *"I built,
-evaluated and shipped a batch-scoring model end to end"*, not *"I can predict salaries."*
-Claiming the latter collapses under one follow-up question.
+Salary in the synthetic generator is computed almost entirely from seniority, so the model
+had recovered the generator, not the job market. Retrained on the 2,992 live postings that
+carry a salary:
+
+| | All rows | **Real only** |
+|---|---|---|
+| GBT R² | 0.898 | **0.617** |
+| Linear baseline R² | 0.865 | **0.475** |
+| GBT's margin over baseline | +0.033 | **+0.142** |
+| Top feature | seniority 96% | **region 72%**, seniority 25%, skills 3% |
+
+Three things improved even though the headline number fell. Region dominating is a true
+fact about the world (a US role pays multiples of an Indian one) rather than an artefact.
+GBT now beats the linear baseline by 4× the margin, so the complex model earns its place
+instead of tying. And the residual error is real market noise instead of a formula.
+
+*Prefer the number you can defend.* A high score that only proves your generator was
+deterministic dies on the first follow-up question.
+
+Every posting is still scored, including synthetic ones — `--real-only` narrows what the
+model LEARNS from, never what it is applied to.
 
 The benchmark numbers come from a separate 200,000-row run recorded in
 `benchmark_results.json`; the counts above are the current pipeline.

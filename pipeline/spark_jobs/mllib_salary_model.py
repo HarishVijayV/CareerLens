@@ -20,11 +20,26 @@ concrete thing to point at. A LinearRegression baseline is trained alongside —
 against a simple baseline is what turns "I trained a model" into "I evaluated a model".
 If the complicated model can't beat the simple one, that's a finding, not a failure.
 
-Honest caveat, worth stating before anyone asks: on the SYNTHETIC data, salary is
-generated almost entirely from seniority, so the model recovers that and reports
-seniority at ~1.0 importance with R²≈0.91. That's a correct result about a synthetic
-world, not evidence the model would work on real postings. On real data expect a much
-lower R² and a broader importance spread.
+Trained on REAL postings only (--real-only, the pipeline default), and the reason is the
+most useful thing in this file.
+
+Trained on everything, it scored R²=0.898 — which looked excellent and meant nothing.
+96% of the importance was seniority, because that is precisely how the synthetic
+generator computes salary. The model had recovered the generator, not the market.
+
+Trained on the ~3k live postings instead:
+
+    R²          0.898  ->  0.617      (lower, and more honest)
+    GBT vs linear  +0.033  ->  +0.142  (the complex model now EARNS its place)
+    top feature  seniority 96%  ->  region 72%, seniority 25%, skills 3%
+
+Region dominating is a true fact about the world — a US role pays multiples of an Indian
+one — rather than an artefact. Preferring the lower number is the point: a high score that
+only proves your generator was deterministic is worth nothing in an interview, and the
+first follow-up question destroys it.
+
+Every posting is still SCORED, including synthetic ones; --real-only narrows what the
+model learns from, never what it is applied to.
 
 Usage:
     python spark_jobs/mllib_salary_model.py --input data/curated/postings.parquet
@@ -48,7 +63,7 @@ FEATURES = ["seniority_idx", "region_idx", "remote_int", "skill_count"]
 
 
 def run(input_path: str, model_out: str | None, metrics_out: str | None,
-        scores_out: str | None) -> None:
+        scores_out: str | None, real_only: bool = False) -> None:
     spark = build_spark("careerlens-mllib")
 
     df = (
@@ -59,8 +74,28 @@ def run(input_path: str, model_out: str | None, metrics_out: str | None,
         .withColumn("remote_int", F.col("remote").cast("int"))
     )
 
+    # Scoring must still cover EVERY posting — a synthetic row with no pay band would
+    # render as a blank column in the UI. So the real-only choice narrows what the model
+    # LEARNS from, never what it is applied to.
+    score_df = df
+
+    if real_only:
+        # Train on live postings only. The trade is explicit: far fewer rows, but they
+        # carry real market structure (a US role genuinely pays multiples of an Indian one)
+        # instead of a generator's formula. Expect a LOWER R^2 — real salaries are noisy in
+        # ways generated ones are not, and a lower number earned on real data is worth more
+        # than a high one that merely proves the generator was deterministic.
+        df = df.filter(F.col("is_real") == True)  # noqa: E712 — Spark Column, not a bool
+
     total = df.count()
-    print(f"Training rows (non-null salary): {total:,}")
+    label = "real postings only" if real_only else "all postings"
+    print(f"Training rows (non-null salary, {label}): {total:,}")
+
+    if total < 500:
+        raise SystemExit(
+            f"Only {total:,} rows to train on — too few to split and evaluate meaningfully. "
+            "Run the ingest first, or drop --real-only."
+        )
 
     # Split BEFORE fitting anything, so no information from the test set can leak into
     # training via the indexers. Fitting the full Pipeline on train only is what keeps
@@ -120,7 +155,7 @@ def run(input_path: str, model_out: str | None, metrics_out: str | None,
                 # of the product instead of a training script that prints metrics and
                 # exits.
                 scored = (
-                    model.transform(df)
+                    model.transform(score_df)
                     .withColumn("predicted_salary", F.round("prediction").cast("long"))
                     .withColumn(
                         "salary_vs_market",
@@ -155,5 +190,10 @@ if __name__ == "__main__":
     parser.add_argument("--model-out", default="data/models/salary_gbt")
     parser.add_argument("--metrics-out", default="data/model_metrics.json")
     parser.add_argument("--scores-out", default="data/curated/postings_scored.parquet")
+    parser.add_argument(
+        "--real-only",
+        action="store_true",
+        help="train on live job-board postings only (still scores every posting)",
+    )
     args = parser.parse_args()
-    run(args.input, args.model_out, args.metrics_out, args.scores_out)
+    run(args.input, args.model_out, args.metrics_out, args.scores_out, args.real_only)

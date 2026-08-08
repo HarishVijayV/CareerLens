@@ -119,7 +119,16 @@ def main() -> None:
     if should("mllib"):
         timings["mllib"] = run_step(
             "4. Train Spark MLlib salary model",
-            [py, "spark_jobs/mllib_salary_model.py", "--input", "data/curated/postings.parquet"],
+            # --real-only: train on the ~3k LIVE postings, not the 147k generated ones.
+            # Trained on everything, the model scored R2=0.898 — but 96% of that was
+            # seniority, because that is how the generator computes salary. It had
+            # recovered the generator, not the market. On real postings R2 drops to 0.617
+            # and region becomes the dominant feature, which is a true fact about the
+            # world (US roles pay multiples of Indian ones). The lower number is the more
+            # honest one, and GBT beats the linear baseline by a wider margin on it, so
+            # the complex model now earns its place instead of tying.
+            [py, "spark_jobs/mllib_salary_model.py", "--input", "data/curated/postings.parquet",
+             "--real-only"],
         )
 
     if should("load"):
