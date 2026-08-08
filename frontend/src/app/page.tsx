@@ -29,7 +29,7 @@ const FEATURES = [
   },
   {
     title: "An assistant that shows its work",
-    body: "Ask in plain English. A planner routes to a specialist agent, which calls real tools against your data — and every call it made is displayed.",
+    body: "Ask in plain English. A planner routes to one specialist — or escalates to several — each calling real tools against your data — and every call it made is displayed.",
   },
   {
     title: "Resume workspace",

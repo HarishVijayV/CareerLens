@@ -41,13 +41,24 @@ DELEGATABLE = ["job_matcher", "resume_tailor", "market_analyst"]
 # through every agent repeatedly, and each delegation is a full nested LLM loop.
 MAX_DELEGATIONS = 4
 
-_ROUTER_PROMPT = """You route a user's request to exactly one specialist agent.
+_ROUTER_PROMPT = """You are the planner. Decide the CHEAPEST way to answer the user.
 
-Available agents:
+Available specialists:
 {catalog}
 
-Respond with ONLY a JSON object: {{"agent": "<name>", "reason": "<short reason>"}}
-Pick the single best fit. If nothing fits well, choose "market_analyst"."""
+You have two choices:
+
+1. Name ONE specialist, if that specialist alone can fully answer the question.
+2. Answer "orchestrator", if the question needs SEVERAL specialists combined. Choose this
+   whenever the question spans more than one specialist's remit — for example "match jobs
+   to my resume AND tell me what to fix" needs the job matcher AND the resume tailor, and
+   "which jobs suit me and is that field growing?" needs the matcher AND the analyst.
+
+Respond with ONLY a JSON object: {{"agent": "<name or orchestrator>", "reason": "<short reason>"}}
+
+Prefer a single specialist when one genuinely suffices — orchestration costs several times
+more. But do NOT force a multi-part question into one specialist: a partial answer that
+silently drops half the question is worse than the extra cost."""
 
 _ORCHESTRATOR_PROMPT = """You are the orchestrator for a job-search assistant.
 
@@ -98,7 +109,7 @@ def choose_agent(user_message: str) -> dict:
 
     try:
         choice = json.loads((response.content or "").strip().strip("`"))
-        if choice.get("agent") in AGENTS:
+        if choice.get("agent") in AGENTS or choice.get("agent") == "orchestrator":
             return choice
     except json.JSONDecodeError:
         pass
@@ -108,7 +119,24 @@ def choose_agent(user_message: str) -> dict:
 
 
 def route_with_llm(user_message: str) -> dict:
+    """Auto mode. The planner picks a single specialist OR escalates to orchestration.
+
+    This escalation is the point. Without it "auto" could only ever route, so a question
+    like "match jobs to my resume and give me the top 3 fixes" got answered by the job
+    matcher alone — it produced something plausible, which is exactly what made the gap
+    hard to notice. Letting the planner choose the MODE, not just the worker, means the
+    user doesn't have to know which mode their question needs.
+    """
     choice = choose_agent(user_message)
+
+    if choice["agent"] == "orchestrator":
+        result = orchestrate(user_message)
+        result["routing_reason"] = (
+            f"planner escalated to the team: {choice.get('reason', '')} "
+            f"— {result['routing_reason']}"
+        )
+        return result
+
     run = route_explicit(choice["agent"], user_message)
     return {
         "mode": "routed",

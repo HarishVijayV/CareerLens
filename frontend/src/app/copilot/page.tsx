@@ -104,7 +104,7 @@ export default function AssistantPage() {
         <div>
           <h1 className="text-2xl font-semibold">Assistant</h1>
           <p className="mt-1 text-base text-zinc-500">
-            Ask in plain English. A planner picks the right specialist agent, which calls real
+            Ask in plain English. A planner picks one specialist — or the whole team — which calls real
             tools against your data — every call is shown with its answer.
           </p>
         </div>
@@ -320,9 +320,11 @@ export default function AssistantPage() {
           </h3>
           <ol className="mb-6 space-y-1.5 text-xs leading-relaxed text-zinc-500">
             <li>
-              1. A <strong>planner</strong> reads your question and picks a specialist
+              1. A <strong>planner</strong> reads your question and picks the cheapest mode
+              that can answer it — <strong>one specialist</strong>, or <strong>the team</strong>
+              if the question spans several
             </li>
-            <li>2. That agent decides which of ITS tools to call</li>
+            <li>2. Each agent decides which of ITS tools to call</li>
             <li>3. Our Python runs the tool and feeds the result back</li>
             <li>4. Repeat until it answers — every call shown with the reply</li>
           </ol>
