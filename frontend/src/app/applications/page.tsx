@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { BarChart, ChartFrame, StatTile } from "@/components/Charts";
-import { api, Application, FunnelResponse, GmailStatus, ResumePerformance } from "@/lib/api";
+import { api, Application, FunnelResponse, GmailStatus, ResumePerformance, ResumeVersion } from "@/lib/api";
 
 const STATUS_LABEL: Record<string, string> = {
   applied: "Applied",
@@ -34,12 +34,17 @@ export default function ApplicationsPage() {
   // previously TOLD the user to "add one manually" with no way to do it.
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ company: "", role: "", status: "applied", resume_version: "" });
+  // Real resume versions, so the A/B field is a CHOICE not free text. Typed labels split
+  // the stats silently — "v1-spark" and "v1 spark" would look like two different resumes
+  // and each would show half the true sample size.
+  const [resumeVersions, setResumeVersions] = useState<ResumeVersion[]>([]);
 
   const load = useCallback(() => {
     api.listApplications().then(setApplications).catch(() => {});
     api.funnel().then(setFunnel).catch(() => {});
     api.resumePerformance().then(setPerformance).catch(() => {});
     api.gmailStatus().then(setGmail).catch(() => {});
+    api.listResumeVersions().then(setResumeVersions).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -188,14 +193,20 @@ export default function ApplicationsPage() {
             </select>
           </label>
           <label className="flex flex-col gap-1 text-xs text-zinc-500">
-            Resume version
-            <span className="text-[10px] text-zinc-400">enables the A/B comparison</span>
-            <input
+            Resume sent
+            <span className="text-[10px] text-zinc-400">optional — lets you compare reply rates</span>
+            <select
               value={form.resume_version}
               onChange={(e) => setForm({ ...form, resume_version: e.target.value })}
-              placeholder="v1-spark"
-              className="w-40 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-            />
+              className="w-48 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            >
+              <option value="">Not tracked</option>
+              {resumeVersions.map((v) => (
+                <option key={v.id} value={v.label}>
+                  {v.label}{v.is_active ? " (current)" : ""}
+                </option>
+              ))}
+            </select>
           </label>
           <button
             type="submit"
