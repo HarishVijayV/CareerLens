@@ -20,7 +20,7 @@ frontend.
 | MLlib salary model | GBT **R² = 0.911** vs LinearRegression baseline R² = 0.178 |
 | Warehouse | 195,959 postings + 980,447 skill rows in Postgres |
 | dbt | 5 models, **17/17 data-quality tests passing** |
-| Tests | 24 Python tests passing |
+| Tests | 33 Python tests passing |
 | Airflow | DAG parses, 7 tasks, 0 import errors |
 | Kubernetes | 14/14 pods running on a 3-node kind cluster, self-healing verified |
 
@@ -83,13 +83,14 @@ cd pipeline && python run_pipeline.py
 ## Repo layout
 
 ```
-services/            five FastAPI microservices, each with its own Dockerfile
+services/            seven services, each with its own Dockerfile
   gateway/             single public entrypoint: auth middleware, CORS, rate limiting
   auth-service/        signup/login/refresh, bcrypt, JWT + rotating refresh tokens, profiles
   jobs-service/        job search + analytics over the dbt star schema, Redis cache-aside
   agent-service/       LLM provider abstraction, 5 agents, tool registry, LangGraph version
-  worker-service/      Celery background jobs
+  worker-service/      Celery background jobs + Gmail sync + Kafka consumer
   notification-service/
+  mcp-server/          MCP tools for external AI clients, network-isolated
 pipeline/            the data engineering side, independent of the web app
   ingestion/           job-board APIs (India+USA) + synthetic generator + warehouse loader
   spark_jobs/          PySpark ETL + MLlib model
@@ -98,12 +99,13 @@ pipeline/            the data engineering side, independent of the web app
   dbt/                 star schema models + data-quality tests
   run_pipeline.py      run the whole thing in one command
 frontend/            Next.js app (8 pages, inline-SVG charts, no chart library)
-tests/               24 tests covering security and pipeline logic
+tests/               33 tests covering security, parsing and pipeline logic
 infra/               docker-compose (core + bigdata profile), env templates
+k8s/                 kind cluster config + Helm chart (verified on a 3-node cluster)
 ```
 
 ## Tech
 
 Python · FastAPI · PySpark · Hadoop/MapReduce · Kafka · Airflow · dbt · PostgreSQL ·
 Snowflake · Redis · Celery · Docker · GitHub Actions · Next.js · React · TypeScript ·
-Tailwind · LangGraph · Gemini/OpenAI/Anthropic/Fireworks
+Tailwind · LangGraph · MCP · Kubernetes · Helm · Gemini/OpenAI/Anthropic/Fireworks
