@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.0-flash"
 
     fireworks_api_key: str = ""
-    fireworks_model: str = "accounts/fireworks/models/llama-v3p1-70b-instruct"
+    fireworks_model: str = "accounts/fireworks/models/deepseek-v4-flash"
 
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-5"
