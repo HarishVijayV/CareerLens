@@ -1,0 +1,18 @@
+{
+  "$comment": [
+    "Project-scoped MCP server config. Claude Code reads this automatically when you open",
+    "this folder, so the CareerLens job-market tools become available in your session.",
+    "",
+    "Requires the stack to be running:  cd infra && docker compose up -d",
+    "",
+    "This exposes ONLY aggregate job-market data. No email, resume, applications or user",
+    "accounts — see services/mcp-server/app/main.py for why that boundary is enforced by",
+    "network isolation rather than by convention."
+  ],
+  "mcpServers": {
+    "careerlens": {
+      "type": "http",
+      "url": "http://localhost:8005/mcp"
+    }
+  }
+}

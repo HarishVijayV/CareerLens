@@ -8,6 +8,9 @@ you can explain, not just something that runs.
 FastAPI microservices behind an API gateway, with tool-calling AI agents and a Next.js
 frontend.
 
+> **New here? Read [HANDBOOK.md](HANDBOOK.md)** — every technology, why it is here, how it is
+> used, and exactly what changes when you host it.
+>
 > **Start here → [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md)** — the short list of things
 > only you can do (about 15 minutes; only one step is required).
 
@@ -69,6 +72,7 @@ cd pipeline && python run_pipeline.py
 
 | Doc | What it covers |
 |---|---|
+| [HANDBOOK.md](HANDBOOK.md) | **The complete guide** — every tech, why/how, hosting changes, interview answers |
 | [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md) | **What you need to do** — API keys, first run |
 | [docs/PROJECT_STORY.md](docs/PROJECT_STORY.md) | The pitch + how to answer "walk me through this" |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, service map, request/data flow |
