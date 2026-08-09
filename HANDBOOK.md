@@ -127,25 +127,290 @@ stop an LLM hallucinating numbers" — you don't let it near unvalidated data.
 
 ## 3. Every technology — what, why, how
 
-### Data engineering
+The table is the summary. Below it, each data tool gets a proper explanation: what it is
+in plain English, what it *can* do, what we actually made it do, and the real code.
 
-| Tech | What it is | Why it's here | How it's used |
+| Tech | What it is | Why it's here | Where |
 |---|---|---|---|
-| **PySpark** | Distributed data processing | Processes more data than one machine's RAM holds; partitions work across cores/nodes | `pipeline/spark_jobs/etl_clean_jobs.py` — dedupe, clean salaries, aggregate ~152K rows |
-| **Hadoop / MapReduce** | The older distributed model | To *prove* why Spark won, with a measured benchmark rather than a claim | `pipeline/mapreduce_demo/` — same aggregation both ways, timed |
-| **Spark MLlib** | ML on Spark | Scores every posting against what its role typically pays | `mllib_salary_model.py` — GBT + a LinearRegression baseline |
-| **Kafka** | Event streaming | Fan-out: one `posting.discovered` event, several independent consumers | `pipeline/events.py` produces; `worker-service/app/consumers/` consumes |
-| **Airflow** | Workflow orchestration | Schedules the pipeline as a DAG with retries — "here's the DAG" beats "I ran some scripts" | `pipeline/airflow/dags/job_pipeline_dag.py`, 7 tasks |
-| **dbt** | SQL transformation + testing | Builds the star schema and **fails the run** if data is bad | `pipeline/dbt/` — 5 models, 17 tests |
-| **PostgreSQL** | Relational database | Serving layer: fast reads for the app and agents | app data + `analytics.*` star schema |
-| **Snowflake** | Cloud data warehouse | Historical/BI analytics; same dbt models, different target | `profiles.yml` target `warehouse` — auto-falls back to Postgres |
-| **Redis** | In-memory store | Cache, rate limiting, Celery broker — three jobs, one dependency | cache-aside in `jobs-service` |
+| **PySpark** | Splits data work across many CPUs | Processes more data than one machine's RAM holds | `pipeline/spark_jobs/etl_clean_jobs.py` |
+| **Hadoop / MapReduce** | The older distributed model | To *prove* why Spark won, with a measured benchmark | `pipeline/mapreduce_demo/` |
+| **Spark MLlib** | Machine learning on Spark | Predicts what a role should pay | `pipeline/spark_jobs/mllib_salary_model.py` |
+| **Kafka** | Carries messages between services | Fan-out: announce once, many listeners | `pipeline/events.py` |
+| **Airflow** | Runs the pipeline on a schedule | Retries, history, a DAG you can show | `pipeline/airflow/dags/` |
+| **dbt** | SQL that builds and TESTS tables | Star schema + fails the run on bad data | `pipeline/dbt/` |
+| **PostgreSQL** | The database | Serving layer for app and agents | `analytics.*` schema |
+| **Snowflake** | Cloud data warehouse | Same dbt models, different target | `profiles.yml` target `warehouse` |
+| **Redis** | In-memory store | Cache, rate limiting, Celery broker | `jobs-service` cache-aside |
+| **Parquet** | Column-based file format | Small and fast to read | `pipeline/data/curated/` |
 
-**Why both real AND synthetic data:** free job APIs return thousands of postings, not
-millions. Sites with millions either charge or forbid scraping. So **real data provides
-the messiness** (missing fields, mixed currencies, monthly salaries in an annual field)
-and **synthetic data provides the scale**. Both go through the identical ETL — one glob,
-one cleaning path, no per-source branching. Full accounting in [§5a](#5a-where-every-row-comes-from--real-vs-generated).
+---
+
+### PySpark — the one that does the actual work
+
+**What it is, simply.** Normal Python reads a file one row at a time in one process. Spark
+splits the file into chunks, hands each chunk to a different CPU core, and runs the same
+code on all of them at once. Add machines and the same code uses those too, unchanged.
+
+**What Spark can do generally:** read enormous files, join them, aggregate them, and write
+results back — across a cluster, recovering automatically if a machine dies mid-job.
+
+**What we make it do.** One job, `etl_clean_jobs.py`, reads both raw sources at once:
+
+```python
+raw = spark.read.json("data/raw/*.jsonl")   # real_postings + synthetic_postings
+```
+
+That glob matters. Both files go through **one** cleaning path, so there is no
+per-source branching to keep in sync. Then:
+
+```python
+cleaned = (
+    raw
+    .dropDuplicates(["posting_id"])                    # same job posted twice
+    .withColumn("salary_clean", clean_salary())        # "$120,000/yr" -> 120000
+    .withColumn("title", F.trim(F.col("title")))
+    .withColumn("skill_count", F.size(F.col("required_skills")))
+    .filter(F.col("title").isNotNull())
+)
+cleaned.cache()
+```
+
+**Three decisions in there worth being able to defend:**
+
+*`cache()`* — Spark is lazy. It doesn't compute anything until you ask for a result, and
+then it recomputes the whole chain **every time you ask again**. We use `cleaned` six
+times (a count, four aggregations, one write), so without `cache()` Spark would redo the
+read-and-clean six times. One line, often the difference between a slow job and a fast one.
+
+*Native SQL instead of a Python function.* Salary cleaning could have been a Python UDF.
+It isn't:
+
+```python
+numeric = F.regexp_replace(F.col(column).cast("string"), r"[^0-9.]", "")
+whole = F.regexp_extract(numeric, r"^(\d+)", 1)
+return F.when(whole == "", None).otherwise(whole.cast("long"))
+```
+
+A UDF forces every row out of the JVM into a Python process and back. Native expressions
+compile into Spark's engine and stay put. *"Avoid Python UDFs when a native expression
+exists"* is one of the highest-value Spark answers you can give.
+
+*Compute once, not per consumer.* `skill_count` is materialised here because the ML model
+and the analytics both want it. Deriving it twice downstream would mean two more joins.
+
+**Output goes to Parquet, not CSV.** Parquet stores data by *column*. Reading only
+`salary` doesn't touch the other columns, and repeated values compress hard. Same data,
+a fraction of the size and read time.
+
+**What breaks without it:** nothing, at this size — pandas would cope with 152k rows. Say
+that plainly. Spark is here so the code path is the one that still works at 152 *million*.
+
+---
+
+### Hadoop MapReduce — kept to prove a point
+
+**What it is.** The older way to split work across machines. You write two functions:
+`map` turns each record into key-value pairs, `reduce` combines all values for a key.
+
+**Why it's still here.** Not for production — to *measure* the claim that Spark is faster
+instead of repeating it. `mapreduce_demo/` runs the same aggregation both ways:
+
+```
+MapReduce median: 2.672s
+Spark median:     1.147s
+-> 57.1% faster (2.33x)
+```
+
+**Why Spark wins, in one sentence:** MapReduce writes to disk between every step; Spark
+keeps intermediate results in memory. Multi-step jobs pay that disk cost repeatedly.
+
+---
+
+### dbt — SQL that also tests itself
+
+**What it is.** You write `SELECT` statements in files. dbt works out the dependency order,
+creates the tables, and runs data tests against the result.
+
+**What it can do:** build models in order, materialise them as tables or views, test data
+quality, generate documentation and a lineage graph.
+
+**What we make it do.** Reshape flat postings into a **star schema**:
+
+```
+                  dim_company
+                       |
+   dim_skill --- bridge_posting_skill --- fact_job_posting
+```
+
+One big fact table of postings; small lookup tables around it. That shape makes
+"average salary by company" fast, and it is the standard warehouse layout.
+
+**Why a bridge table and not an array column.** A posting has many skills and a skill
+belongs to many postings. You *could* store an array. We don't, because array handling
+differs per engine (`unnest` in Postgres, `FLATTEN` in Snowflake) — bridge rows are plain
+SQL that works identically everywhere. Same portability reasoning as the rest of the stack.
+
+**The staging layer earns its keep.** `stg_postings.sql` renames and casts, nothing else.
+One real example:
+
+```sql
+coalesce(lower(is_real::text) in ('true','t','1'), false) as is_real
+```
+
+`is_real` arrives as *text* holding `'True'`, because synthetic rows have no such field
+and the loader widened the column. Exactly one model knows about that quirk; every mart
+downstream just reads a boolean.
+
+**The tests are the point.** 17 of them — no nulls in keys, no duplicate ids, salary in a
+sane range. `dbt test` **fails the pipeline** if any fail. That is what stops bad data
+reaching the app, and it is a much better answer to "how do you ensure data quality?" than
+"we check manually".
+
+**Indexes are attached here too**, via post-hooks — because dbt drops and recreates each
+table on every run, so an index created by hand disappears at the next run.
+
+---
+
+### Spark MLlib — the salary model
+
+**What it is.** Spark's machine-learning library. Same distributed engine, so training
+happens on the cluster rather than by pulling data into one process.
+
+**What we make it do.** Learn what a job *should* pay, then compare that to what it
+*does* pay:
+
+```
+advertised $145,000 - predicted $125,000 = +$20,000 -> "above market"
+```
+
+Four inputs: seniority, region, remote, skill count. One output: salary.
+
+**Trained from scratch on our own data.** Not downloaded, not fine-tuned. `GBTRegressor`
+(gradient-boosted trees), with a `LinearRegression` baseline alongside — because
+comparing against something simple is what turns *"I trained a model"* into *"I evaluated
+a model"*.
+
+**Batch scoring, not per request.** Every posting is scored once during the pipeline and
+the result written to the warehouse. Features only change when the pipeline runs, so
+paying Spark's startup cost on every HTTP request would be absurd. Real-time inference is
+for when the features depend on the request itself.
+
+**The honest part.** Trained on everything it scored R²=0.898 — and 96% of that was
+seniority, because that is precisely how the synthetic generator computes salary. It had
+learned the generator, not the market. Trained on real postings only, R² drops to 0.617,
+region becomes the top feature, and the complex model beats the baseline by 4× the margin.
+**Prefer the number you can defend.** Full comparison in §1.
+
+---
+
+### Kafka — the announcer
+
+**What it is.** A message log. One service publishes an event; any number of others
+subscribe. It is **not** storage — messages expire after days and you never query it like
+a database.
+
+**What we make it do.** After ingest, announce the new postings once:
+
+```
+pipeline finds 200 new jobs
+        |
+        +-- "posting.discovered" --+-- worker: notify matching users
+                                   +-- worker: update skill counts
+                                   +-- (add a fourth listener, no pipeline change)
+```
+
+**The honest justification.** Without Kafka the pipeline would have to call each consumer
+directly, and adding a listener would mean editing the pipeline. That is the fan-out
+argument, and it is the only one that holds at this size.
+
+**Currently off** (behind the `bigdata` compose profile), so the ingest prints
+`Kafka unavailable — events skipped`. The pipeline finishes normally: an announcement
+failing must never stop a data load. Say "the producer is wired and runs when the profile
+is up", not "we use Kafka in production".
+
+---
+
+### Airflow — the scheduler
+
+**What it is.** Runs your pipeline steps as a **DAG** — a graph of tasks with dependencies,
+retries, and a history of every run.
+
+**What we make it do.** The same 7 steps, on `schedule="@daily"`, with `catchup=False` so
+switching it on doesn't backfill a year of runs. It calls the same scripts
+`run_pipeline.py` does — neither duplicates logic.
+
+**Why daily.** Postings don't change by the minute, a full run is ~7 minutes, and Adzuna's
+free quota is daily. A 5-minute schedule would exhaust the quota before lunch republishing
+identical rows.
+
+Also off by default: it costs ~600MB of RAM to have running on a laptop.
+
+---
+
+### dbt vs Postgres — the confusion worth clearing up
+
+They are not alternatives, and they don't overlap. **dbt has no database of its own.**
+
+* **Postgres** is the *place*. It stores the tables.
+* **dbt** is the *builder*. It writes SQL that Postgres executes, in the right order.
+
+dbt connects to Postgres, sends `CREATE TABLE ... AS SELECT ...`, and the resulting table
+lives in Postgres. Turn dbt off and the tables stay exactly where they are — you just have
+no repeatable way to rebuild them.
+
+Concretely, in this project:
+
+| | Who does it |
+|---|---|
+| Store users, resumes, applications | **Postgres** (the app writes directly, via SQLAlchemy) |
+| Load 151,883 cleaned rows into `raw.postings` | **Python** (`load_to_warehouse.py`, using `COPY`) |
+| Turn `raw.postings` into the star schema | **dbt** (`dbt run` — 5 models) |
+| Check the result isn't broken | **dbt** (`dbt test` — 17 tests) |
+| Serve `/jobs/search` to the website | **Postgres** (the API queries it directly) |
+
+So the flow is: Python loads **raw** → dbt reshapes it into **analytics** → the app reads
+**analytics**. dbt only ever runs during the pipeline. It is not involved in serving a
+single web request.
+
+**Why not just write the SQL by hand?** You could. dbt buys three things that matter:
+it works out model dependency order for you, it *tests* the output and fails the run on
+bad data, and swapping Postgres for Snowflake is a config change rather than a rewrite.
+
+**One-line version:** Postgres is the warehouse; dbt is the crew that arranges it and
+checks nothing is broken.
+
+---
+
+### PostgreSQL, Snowflake, Redis — where things live
+
+**Postgres** holds two separate things: the app's own data (users, resumes, applications)
+and the `analytics.*` star schema the pipeline writes. Loading uses `COPY`, not row-by-row
+`INSERT` — minutes versus seconds, because `INSERT` sends 152k separate statements while
+`COPY` streams the file once.
+
+**Snowflake** is the same *kind* of thing as Postgres — storage — but a cloud warehouse
+built for large analytical scans. The same dbt models target it by changing one config
+line. It auto-falls back to Postgres when no credentials exist, which is why the trial
+expiring costs nothing.
+
+**Redis** holds nothing permanent: cached query results, rate-limit counters, and Celery
+task results. Three jobs, one dependency. Cache-aside pattern — check Redis, miss, query
+Postgres, write back.
+
+---
+
+### Where each piece of YOUR data lives
+
+| Data | Stored where | Notes |
+|---|---|---|
+| Resume text + LaTeX | Postgres `TEXT` | |
+| Original PDF | Postgres `LargeBinary` | actual bytes — PDF text extraction is lossy |
+| Refresh token | Postgres | **hashed**, never raw, like a password |
+| Access token (JWT) | httpOnly cookie | JavaScript cannot read it |
+| Job postings | Postgres `analytics.*` | written by the pipeline |
+| Cache / task results | Redis | disposable |
+
+---
 
 ### Backend
 
@@ -156,7 +421,7 @@ one cleaning path, no per-source branching. Full accounting in [§5a](#5a-where-
 | **JWT** | Signed stateless token | Fast auth check without a DB lookup per request |
 | **Refresh tokens** | Opaque, stored hashed | JWTs can't be revoked early — refresh tokens can |
 | **bcrypt** | Password hashing | Deliberately slow, salted per password |
-| **Celery** | Distributed task queue | Slow work (inbox sync, scraping) off the request path |
+| **Celery** | Distributed task queue | Slow work (inbox sync) off the request path |
 | **SQLAlchemy** | ORM | Parameterized queries — SQL injection impossible by construction |
 
 ### AI
@@ -180,10 +445,6 @@ charting library** — every visual decision is explainable, and there's no blac
 | **Docker** | Same environment everywhere |
 | **Docker Compose** | Whole stack, one command, auto-restarts |
 | **Kubernetes** | Self-healing, rolling deploys, horizontal scaling |
-| **Helm** | One chart, many environments — the values file *is* the environment contract |
-| **kind** | Real Kubernetes locally, so you learn k8s without also fighting cloud IAM |
-| **GitHub Actions** | test → build → publish, each gate protecting the next |
-| **GHCR** | Image registry, free for public repos |
 
 ---
 
