@@ -3,6 +3,10 @@
 **Read this first.** Everything about this project: what every technology is, why it's
 here, how it's used, what breaks without it, and exactly what changes when you host it.
 
+> **In a hurry?** [CHEATSHEET.md](CHEATSHEET.md) is this whole document compressed to five
+> minutes — the pipeline, every technology in one line, the numbers, and the interview
+> answers. Come back here when you need the *why*.
+>
 > **Deploying it?** Read [DEPLOYMENT.md](DEPLOYMENT.md) instead — a click-by-click guide
 > from a fresh cloud account to a live HTTPS site, including every URL, redirect and
 > cookie setting that has to change. This handbook explains the system; that one

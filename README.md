@@ -73,6 +73,7 @@ cd pipeline && python run_pipeline.py
 
 | Doc | What it covers |
 |---|---|
+| [CHEATSHEET.md](CHEATSHEET.md) | **Start here if you're in a hurry** — the whole project in 5 minutes: pipeline, every tech in one line, the numbers, and what to say in an interview |
 | [HANDBOOK.md](HANDBOOK.md) | **The complete guide** — every tech, why/how, hosting changes, interview answers |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | **Putting it online** — click-by-click from a fresh cloud account to a live HTTPS site, including every URL, redirect and cookie that must change |
 | [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md) | **What you need to do** — API keys, first run |
