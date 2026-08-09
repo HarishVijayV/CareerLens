@@ -17,7 +17,10 @@ you don't rely on the prompt asking nicely, you don't give it the tool.
 # ---------------------------------------------------------------- tool schema fragments
 SEARCH_JOBS_TOOL = {
     "name": "search_jobs",
-    "description": "Search real job postings in the warehouse. Use this to find jobs matching criteria.",
+    "description": (
+        "Search LIVE job postings the user can actually apply to. Returns real job-board "
+        "listings only, each with a URL."
+    ),
     "input_schema": {
         "type": "object",
         "properties": {
@@ -27,6 +30,14 @@ SEARCH_JOBS_TOOL = {
             "remote_only": {"type": "boolean"},
             "min_salary": {"type": "integer"},
             "limit": {"type": "integer", "description": "max results, default 10"},
+            "include_sample_postings": {
+                "type": "boolean",
+                "description": (
+                    "Default false. Set true ONLY for market-wide statistics where a larger "
+                    "sample matters more than applicability — these extra postings are "
+                    "generated and cannot be applied to, so never recommend them to the user."
+                ),
+            },
         },
     },
 }

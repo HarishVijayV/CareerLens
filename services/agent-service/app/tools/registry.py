@@ -31,9 +31,28 @@ def search_jobs(
     remote_only: bool = False,
     min_salary: int | None = None,
     limit: int = 10,
+    include_sample_postings: bool = False,
 ) -> str:
-    """Search real postings from the warehouse."""
+    """Search LIVE job-board postings from the warehouse.
+
+    Real postings only by default, and this is a correctness fix rather than a preference.
+
+    The docstring here used to claim "real postings" while the call passed no provenance
+    filter at all, so the agent searched the synthetic rows too. Because the warehouse
+    orders real-first, that stayed invisible until a filter matched fewer than `limit` real
+    rows — then the agent quietly padded its recommendations with generated ones. An
+    observed run advised applying to "Johnson, Cooper and Reilly" and "Klein PLC", both
+    Faker output, with confident reasoning attached.
+
+    That is the worst failure mode this system has: not a wrong answer, but a plausible
+    one that wastes someone's actual job search. Market-wide questions ("what pays most
+    across the market?") legitimately want the full sample, which is what the escape hatch
+    is for — but recommending a job to apply to must never return something unapplyable.
+    """
     params = {k: v for k, v in locals().items() if v not in (None, False)}
+    params.pop("include_sample_postings", None)
+    if not include_sample_postings:
+        params["source_type"] = "real"
     params["limit"] = min(limit, 25)
     resp = httpx.get(f"{JOBS_SERVICE_URL}/jobs/search", params=params, timeout=_TIMEOUT)
     resp.raise_for_status()
