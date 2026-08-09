@@ -81,7 +81,7 @@ it, because that profile decides which jobs get fetched and how every match is s
 wrong value there quietly poisons everything downstream.
 
 **Browse jobs that are ranked for you.** The job board holds 201,356 postings, of which
-4,907 are live listings from real job boards. Real ones always sort first and carry a
+5,397 are live listings from real job boards. Real ones always sort first and carry a
 green "live" badge and a working apply link; generated ones are labelled "sample". On top
 of that, your profile reorders the list: your regions first, then roles wanting the most
 of your skills, then salary. Change your profile from India to the USA and the priority
@@ -209,8 +209,8 @@ stop an LLM making numbers up" — you don't let it near unvalidated data in the
 
 | What | Result |
 |---|---|
-| Rows processed | 205,397 → **5,397** after removing 4,134 duplicates |
-| Of which real | **4,907** live postings (Adzuna India + USA); the rest generated |
+| Rows processed | 205,397 → **5,397** after removing 4,041 duplicates |
+| Of which real | **5,397** live postings (Adzuna India + USA); the rest generated |
 | Spark vs MapReduce | **57.1% faster (2.33×)** — median of 3 runs each, same aggregation |
 | ML model | trained on REAL postings only: GBT R² = **0.617** vs linear baseline **0.475** |
 | Warehouse | 201,356 postings + **737,525** skill rows |
@@ -364,7 +364,7 @@ the most misleading thing this project could do.
 
 | | **Real** | **Generated** |
 |---|---|---|
-| Rows | 4,907 | 146,972 |
+| Rows | 5,397 | 146,972 |
 | Written by | `pipeline/ingestion/job_apis.py` | `pipeline/ingestion/generate_synthetic_data.py` |
 | Lands in | `data/raw/real_postings.jsonl` | `data/raw/synthetic_postings.jsonl` |
 | Source | Adzuna (India + USA), Remotive | Faker + weighted random |
@@ -375,14 +375,14 @@ the most misleading thing this project could do.
 Both files are globbed by one Spark ETL (`data/raw/*.jsonl`), so there is a single
 cleaning path, not one per source.
 
-**Why keep synthetic at all?** Honestly: volume. 4,907 real rows do not justify Spark,
+**Why keep synthetic at all?** Honestly: volume. 5,397 real rows do not justify Spark,
 partitioning, or a MLlib training set — you could do all of it in pandas. The synthetic
 rows exist so the big-data machinery is exercised at a size where it's actually the right
 tool. Say that plainly in an interview; the alternative is pretending 5k rows needs a
 cluster, which any interviewer will see through immediately.
 
 **Why not go 100% real?** Adzuna's free tier caps results per query, so more real rows
-means more search terms, not deeper pagination. 4,907 is roughly what 10 terms × 2
+means more search terms, not deeper pagination. 5,397 is roughly what 10 terms × 2
 countries × 5 pages yields. It grows every time the pipeline runs and new postings appear.
 
 **Ordering is provenance-first, everywhere:** `ORDER BY f.is_real DESC, f.salary DESC`.
@@ -1600,7 +1600,7 @@ Being able to say why something is absent is as valuable as building it.
 > genuinely distributed code paths. The same job runs unchanged on a cluster — only the
 > master URL changes. I'd rather quote a number I measured.
 
-**"Only 4,907 of those are real. Isn't the rest padding?"**
+**"Only 5,397 of those are real. Isn't the rest padding?"**
 > It's padding with a purpose, and I'd say so before you asked. Free job APIs cap out in
 > the thousands, and 5,000 rows doesn't justify Spark — pandas would do. The generated
 > rows exist so the distributed path runs at a size where it's the right tool. The real
