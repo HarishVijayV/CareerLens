@@ -12,6 +12,8 @@ interface ChatTurn {
   toolCalls?: ToolCall[];
 }
 
+const RESUME_CHAT_KEY = "careerlens.resume.chat";
+
 const QUICK_ASKS = [
   "Convert my resume to LaTeX",
   "Rewrite my bullets to emphasise data engineering",
@@ -35,7 +37,33 @@ export default function ResumePage() {
   const [rendering, setRendering] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
+  /* The resume conversation survives navigation, same as the Assistant's.
+   *
+   * Routing away unmounts this page, so the chat went with it — and a resume rewrite takes
+   * 30-90 seconds, which is exactly long enough that switching tabs to do something else
+   * is the natural thing to do. Coming back to an empty panel makes it look like the
+   * request failed when it actually succeeded and saved a new version. */
   const [chat, setChat] = useState<ChatTurn[]>([]);
+  const [chatRestored, setChatRestored] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(RESUME_CHAT_KEY);
+      if (saved) setChat(JSON.parse(saved));
+    } catch {
+      // A corrupt entry must never stop the page loading.
+    }
+    setChatRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!chatRestored) return;   // don't write the empty initial state over saved turns
+    try {
+      sessionStorage.setItem(RESUME_CHAT_KEY, JSON.stringify(chat));
+    } catch {
+      // Quota exceeded — keep working in memory.
+    }
+  }, [chat, chatRestored]);
   const [message, setMessage] = useState("");
   const [thinking, setThinking] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -55,22 +83,31 @@ export default function ResumePage() {
     setDraftLatex(a.content_latex ?? "");
     setDirty(false);
 
-    // Drop the cached PDF ONLY when the active version actually changed.
+    // Drop the cached PDF only when the active version actually changed — otherwise
+    // load(), which runs after every chat message, would discard a perfectly current
+    // render and recompile it. That needless recompile was the visible "blink".
     //
-    // This used to clear unconditionally, and load() runs after every chat message — so
-    // sending "convert to LaTeX" threw away a perfectly current render and recompiled it,
-    // and the viewer visibly reloaded. That is the blink: not a slow render, a needless
-    // one. A stale render is only possible if the active version moved, so that is the
-    // condition to test.
-    setPdfUrl((old) => {
-      if (old && activeIdRef.current !== a.id) {
-        URL.revokeObjectURL(old);
-        return null;
-      }
-      return old;
-    });
+    // The comparison is captured BEFORE the state update, not read inside it. Reading
+    // activeIdRef from within the setPdfUrl updater was a race: React runs updaters
+    // asynchronously, so by the time it ran, the line below had already advanced the ref
+    // to the NEW id — the check compared the new id against itself, concluded nothing had
+    // changed, and kept the stale PDF. The result was the opposite of the bug it fixed:
+    // the agent rewrote the resume, the LaTeX tab showed the new text, and the PDF still
+    // showed the old document until a manual refresh.
+    //
+    // A stale-closure race like this is exactly what refs invite; comparing plain values
+    // taken at a known point avoids the question entirely.
+    const previousId = activeIdRef.current;
+    const versionChanged = previousId !== (a.id ?? null);
     activeIdRef.current = a.id ?? null;
-    setPdfError(null);
+
+    if (versionChanged) {
+      setPdfUrl((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return null;      // null triggers the render effect, which fetches the new PDF
+      });
+      setPdfError(null);
+    }
   }, []);
 
   useEffect(() => {
