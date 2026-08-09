@@ -58,26 +58,28 @@ function savedResumeLabel(answer: AgentAnswer | undefined): string | null {
   }
 }
 
-/** Strip internal plumbing out of a delegated question before showing it.
+/** What each specialist was brought in to do.
  *
- *  The router prepends "[user_id: <uuid>]" so a sub-agent knows whose data to read, and
- *  the orchestrator often repeats it in its own wording ("For user_id <uuid>: ..."). Both
- *  are real and necessary — and meaningless to the person reading the chat, who sees a raw
- *  database id attached to their own question. Removed at the display layer only; the
- *  agents still receive it. */
-function cleanDelegationQuestion(question: string): string {
-  return question
-    .replace(/^\s*\[user_id:[^\]]*\]\s*/i, "")
-    .replace(/for\s+user[_ ]?id\s*:?\s*[0-9a-f-]{8,}\s*[:,-]?\s*/gi, "")
-    .replace(/\(\s*user[_ ]?id\s*:?\s*[0-9a-f-]{8,}\s*\)/gi, "")
-    .replace(/user[_ ]?id\s*:?\s*[0-9a-f-]{8,}\s*/gi, "")
-    // Removing the id mid-sentence can leave an orphaned fragment at the front, e.g.
-    // "For user_id abc123 (Harish Vijay V). Rewrite..." -> "(Harish Vijay V). Rewrite...".
-    // Drop a leading parenthetical and any punctuation the strip left dangling.
-    .replace(/^\s*\([^)]*\)\s*[.,:;-]*\s*/, "")
-    .replace(/^\s*[.,:;-]+\s*/, "")
-    .trim();
-}
+ *  Fixed labels, not the generated question. The orchestrator writes its own wording for
+ *  each sub-agent and that text kept containing the internal user id — "[user_id: ...]",
+ *  "For user_id ...", "User ID: ..." — in a new shape each time. Stripping it with regexes
+ *  was whack-a-mole: a model can write an id a dozen ways, and every miss put a raw
+ *  database uuid on screen next to the user's own question.
+ *
+ *  The generated wording was never worth showing anyway. What a reader actually wants to
+ *  know is WHICH specialist ran and what it touched, and both of those are structured
+ *  fields we already have. Not rendering model-written text at all removes the whole class
+ *  of bug rather than patching instances of it.
+ *
+ *  The full question is still in the API response for debugging — it is just not UI. */
+const AGENT_ROLE: Record<string, string> = {
+  job_matcher: "found and scored matching jobs",
+  resume_tailor: "rewrote your resume for the role",
+  market_analyst: "looked up market statistics",
+  skill_extractor: "pulled requirements out of a job description",
+  profile_extractor: "read your resume into profile fields",
+  email_classifier: "classified an email",
+};
 
 export default function AssistantPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -319,9 +321,13 @@ export default function AssistantPage() {
                         </div>
                         {turn.answer.delegations.map((d, k) => (
                           <div key={k} className="text-blue-800 dark:text-blue-400">
-                            {k + 1}. <strong>{d.agent}</strong> — &ldquo;
-                            {cleanDelegationQuestion(d.question).slice(0, 90)}
-                            {cleanDelegationQuestion(d.question).length > 90 ? "…" : ""}&rdquo;
+                            {k + 1}. <strong>{d.agent}</strong> — {AGENT_ROLE[d.agent] ?? "worked on this"}
+                            {d.tools_used?.length ? (
+                              <span className="text-blue-700/70 dark:text-blue-400/70">
+                                {" "}
+                                ({d.tools_used.join(", ")})
+                              </span>
+                            ) : null}
                           </div>
                         ))}
                       </div>
