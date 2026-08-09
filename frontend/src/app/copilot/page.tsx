@@ -56,6 +56,27 @@ function savedResumeLabel(answer: AgentAnswer | undefined): string | null {
   }
 }
 
+/** Strip internal plumbing out of a delegated question before showing it.
+ *
+ *  The router prepends "[user_id: <uuid>]" so a sub-agent knows whose data to read, and
+ *  the orchestrator often repeats it in its own wording ("For user_id <uuid>: ..."). Both
+ *  are real and necessary — and meaningless to the person reading the chat, who sees a raw
+ *  database id attached to their own question. Removed at the display layer only; the
+ *  agents still receive it. */
+function cleanDelegationQuestion(question: string): string {
+  return question
+    .replace(/^\s*\[user_id:[^\]]*\]\s*/i, "")
+    .replace(/for\s+user[_ ]?id\s*:?\s*[0-9a-f-]{8,}\s*[:,-]?\s*/gi, "")
+    .replace(/\(\s*user[_ ]?id\s*:?\s*[0-9a-f-]{8,}\s*\)/gi, "")
+    .replace(/user[_ ]?id\s*:?\s*[0-9a-f-]{8,}\s*/gi, "")
+    // Removing the id mid-sentence can leave an orphaned fragment at the front, e.g.
+    // "For user_id abc123 (Harish Vijay V). Rewrite..." -> "(Harish Vijay V). Rewrite...".
+    // Drop a leading parenthetical and any punctuation the strip left dangling.
+    .replace(/^\s*\([^)]*\)\s*[.,:;-]*\s*/, "")
+    .replace(/^\s*[.,:;-]+\s*/, "")
+    .trim();
+}
+
 export default function AssistantPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [message, setMessage] = useState("");
@@ -230,8 +251,9 @@ export default function AssistantPage() {
                         </div>
                         {turn.answer.delegations.map((d, k) => (
                           <div key={k} className="text-blue-800 dark:text-blue-400">
-                            {k + 1}. <strong>{d.agent}</strong> — &ldquo;{d.question.slice(0, 90)}
-                            {d.question.length > 90 ? "…" : ""}&rdquo;
+                            {k + 1}. <strong>{d.agent}</strong> — &ldquo;
+                            {cleanDelegationQuestion(d.question).slice(0, 90)}
+                            {cleanDelegationQuestion(d.question).length > 90 ? "…" : ""}&rdquo;
                           </div>
                         ))}
                       </div>
