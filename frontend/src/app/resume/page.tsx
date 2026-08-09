@@ -319,6 +319,30 @@ export default function ResumePage() {
                       Ask the assistant to fix it
                     </button>
                   </div>
+                ) : !canShowDocument ? (
+                  // No LaTeX and no uploaded PDF, so there is genuinely nothing to render.
+                  // This used to fall through to "Rendering document…" and sit there
+                  // forever — a spinner that waits for something nobody is producing,
+                  // which reads as "slow" when the real answer is "not possible yet".
+                  // AI-tailored versions are plain text, so this is the COMMON case right
+                  // after a tailor, not an edge case.
+                  <div className="p-5">
+                    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      This version is plain text.
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      There is no LaTeX source or uploaded PDF for{" "}
+                      <strong>{active?.label ?? "this version"}</strong>, so there is no
+                      document to display. Read it under <strong>Text</strong>, or convert
+                      it so it can be rendered and downloaded as a PDF.
+                    </p>
+                    <button
+                      onClick={() => send("Convert my resume to LaTeX")}
+                      className="mt-3 rounded bg-zinc-900 px-3 py-1.5 text-xs text-white dark:bg-white dark:text-zinc-900"
+                    >
+                      Convert to LaTeX
+                    </button>
+                  </div>
                 ) : rendering || !pdfUrl ? (
                   <p className="p-5 text-xs text-zinc-500">Rendering document…</p>
                 ) : (

@@ -36,6 +36,26 @@ interface Turn {
  * actually queried my data" — it makes the answer verifiable rather than something you
  * have to take on faith.
  */
+/** The label of a resume version saved during this turn, if any.
+ *
+ *  Read from the tool RESULT rather than the arguments: the arguments are what the model
+ *  asked for, the result is what the server actually stored — and the server appends a
+ *  suffix when a label collides, so the two can differ. Showing the requested name would
+ *  send the user looking for a version that does not exist under that name. */
+function savedResumeLabel(answer: AgentAnswer | undefined): string | null {
+  const call = answer?.tool_calls?.find((c) => c.tool === "save_tailored_resume");
+  if (!call) return null;
+  try {
+    const parsed = JSON.parse(call.result_preview);
+    return parsed.saved ? (parsed.label ?? null) : null;
+  } catch {
+    // result_preview is truncated at 400 chars, so a long result may not parse. The label
+    // sits near the front, so fall back to reading it out directly.
+    const match = call.result_preview.match(/"label"\s*:\s*"([^"]+)"/);
+    return match ? match[1] : null;
+  }
+}
+
 export default function AssistantPage() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [message, setMessage] = useState("");
@@ -182,6 +202,25 @@ export default function AssistantPage() {
                     >
                       {turn.text}
                     </p>
+
+                    {savedResumeLabel(turn.answer) && (
+                      // Surface the saved version by NAME. It was only visible inside the
+                      // collapsed tool-call list, so the assistant would say "I tailored
+                      // your resume" and you had no idea what to look for on the Resume
+                      // page — an action with no receipt.
+                      <div className="mb-3 rounded border border-emerald-200 bg-emerald-50 p-2 text-xs dark:border-emerald-900 dark:bg-emerald-950/40">
+                        <span className="text-emerald-900 dark:text-emerald-300">
+                          Saved as a new version:{" "}
+                          <strong>{savedResumeLabel(turn.answer)}</strong>
+                        </span>{" "}
+                        <a href="/resume" className="underline text-emerald-800 dark:text-emerald-400">
+                          open in Resume
+                        </a>
+                        <div className="mt-0.5 text-emerald-800/80 dark:text-emerald-400/80">
+                          Your previous versions are untouched.
+                        </div>
+                      </div>
+                    )}
 
                     {turn.answer?.delegations && turn.answer.delegations.length > 0 && (
                       <div className="mb-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs dark:border-blue-900 dark:bg-blue-950/40">

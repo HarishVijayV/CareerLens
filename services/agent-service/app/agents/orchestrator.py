@@ -98,7 +98,20 @@ def route_explicit(agent_name: str, user_message: str) -> AgentRun:
 
 # ---------------------------------------------------------------- 2. routing
 def choose_agent(user_message: str) -> dict:
-    catalog = "\n".join(f"- {name}: {cfg['description']}" for name, cfg in AGENTS.items())
+    """Pick a specialist for a CHAT question.
+
+    The catalog is deliberately DELEGATABLE, not every agent. skill_extractor,
+    profile_extractor and email_classifier are tool-less: they turn a block of text handed
+    to them into JSON, and are called directly by the upload and inbox-sync flows. Offering
+    them here let the planner route "what are my skills" to profile_extractor, which — with
+    no tools and no resume pasted into the question — could only answer
+    `{"skills": [], "full_name": null, ...}`.
+
+    That is the failure worth noticing: it did its job perfectly on the input it was given,
+    and the user got an empty JSON object. Routing a question to an agent that cannot
+    fetch anything is a routing bug, not a model bug.
+    """
+    catalog = "\n".join(f"- {name}: {AGENTS[name]['description']}" for name in DELEGATABLE)
     provider = get_llm_provider()
 
     response = provider.chat(
@@ -110,7 +123,10 @@ def choose_agent(user_message: str) -> dict:
 
     try:
         choice = json.loads((response.content or "").strip().strip("`"))
-        if choice.get("agent") in AGENTS or choice.get("agent") == "orchestrator":
+        # Validate against DELEGATABLE, not AGENTS. The prompt only offers these, but a
+        # model can still name something it saw elsewhere, and accepting a tool-less agent
+        # here would reintroduce the empty-JSON answer this list exists to prevent.
+        if choice.get("agent") in DELEGATABLE or choice.get("agent") == "orchestrator":
             return choice
     except json.JSONDecodeError:
         pass
