@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ActiveResume, api, ApiError, ResumeVersion, ToolCall } from "@/lib/api";
 
 interface ChatTurn {
@@ -37,6 +39,8 @@ export default function ResumePage() {
   const [message, setMessage] = useState("");
   const [thinking, setThinking] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  // Which version the current PDF blob belongs to, so a reload is only forced on a change.
+  const activeIdRef = useRef<string | null>(null);
 
   const hasLatex = Boolean(draftLatex);
   // A document view is possible either from stored LaTeX (compiled) or from an original
@@ -51,12 +55,21 @@ export default function ResumePage() {
     setDraftLatex(a.content_latex ?? "");
     setDirty(false);
 
-    // Drop any cached PDF — the active version just changed, so a stale render would be
-    // showing a different document entirely.
+    // Drop the cached PDF ONLY when the active version actually changed.
+    //
+    // This used to clear unconditionally, and load() runs after every chat message — so
+    // sending "convert to LaTeX" threw away a perfectly current render and recompiled it,
+    // and the viewer visibly reloaded. That is the blink: not a slow render, a needless
+    // one. A stale render is only possible if the active version moved, so that is the
+    // condition to test.
     setPdfUrl((old) => {
-      if (old) URL.revokeObjectURL(old);
-      return null;
+      if (old && activeIdRef.current !== a.id) {
+        URL.revokeObjectURL(old);
+        return null;
+      }
+      return old;
     });
+    activeIdRef.current = a.id ?? null;
     setPdfError(null);
   }, []);
 
@@ -346,7 +359,17 @@ export default function ResumePage() {
                 ) : rendering || !pdfUrl ? (
                   <p className="p-5 text-xs text-[var(--text-muted)]">Rendering document…</p>
                 ) : (
-                  <iframe src={pdfUrl} className="h-full w-full" title="Resume document" />
+                  // `key` pinned to the URL, so React reuses this iframe across renders
+                  // instead of tearing it down and building a new one. Without it any
+                  // state change on the page — typing in the chat, a status message —
+                  // remounted the iframe, and the PDF viewer reloaded from scratch each
+                  // time. That is the blink: not a slow render, a repeated one.
+                  <iframe
+                    key={pdfUrl}
+                    src={pdfUrl}
+                    className="h-full w-full"
+                    title="Resume document"
+                  />
                 )}
               </div>
             ) : (
@@ -397,9 +420,16 @@ export default function ResumePage() {
                     <div className="mb-1 font-medium text-[var(--text-muted)]">
                       {turn.role === "user" ? "You" : "Assistant"}
                     </div>
-                    <p className="whitespace-pre-wrap text-[var(--text-primary)]">
-                      {turn.text}
-                    </p>
+                    {turn.role === "user" ? (
+                      <p className="whitespace-pre-wrap text-[var(--text-primary)]">{turn.text}</p>
+                    ) : (
+                      // Same models, same markdown as the Assistant page — bold, headings
+                      // and lists arrived here as literal ** and # because this panel
+                      // rendered pre-wrapped text.
+                      <div className="text-[var(--text-primary)] [&_h2]:mt-2 [&_h2]:mb-1 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:font-semibold [&_li]:my-0.5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:my-1.5 [&_strong]:font-semibold [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-4">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.text}</ReactMarkdown>
+                      </div>
+                    )}
                     {turn.toolCalls?.length ? (
                       <p className="mt-1.5 border-t border-[var(--border-subtle)] pt-1 text-[10px] text-[var(--text-muted)]">
                         tools: {turn.toolCalls.map((t) => t.tool).join(", ")}

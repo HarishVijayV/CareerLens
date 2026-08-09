@@ -6,6 +6,8 @@ import remarkGfm from "remark-gfm";
 import AppShell from "@/components/AppShell";
 import { AgentAnswer, api, ApiError } from "@/lib/api";
 
+const CHAT_STORAGE_KEY = "careerlens.assistant.turns";
+
 const EXAMPLES = [
   "Which skills pay the most above average?",
   "Find me remote data engineering jobs paying over 120000",
@@ -82,7 +84,42 @@ const AGENT_ROLE: Record<string, string> = {
 };
 
 export default function AssistantPage() {
+  /* Conversation survives navigation.
+   *
+   * Next.js unmounts a page when you route away, so the component's state went with it —
+   * click Dashboard and come back and the whole conversation was gone, including answers
+   * that had taken ninety seconds to produce. Losing that to a navigation is the same
+   * class of problem as losing it to a logout: work destroyed by something the user did
+   * not think of as destructive.
+   *
+   * sessionStorage rather than localStorage: a conversation belongs to a browsing session,
+   * not to the machine forever. Closing the tab is a deliberate end; clicking a nav link
+   * is not.
+   */
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [restored, setRestored] = useState(false);
+
+  useEffect(() => {
+    // Read in an effect, not in the useState initialiser: this component renders on the
+    // server first, where sessionStorage does not exist, and touching it during render is
+    // a hydration mismatch.
+    try {
+      const saved = sessionStorage.getItem(CHAT_STORAGE_KEY);
+      if (saved) setTurns(JSON.parse(saved));
+    } catch {
+      // A corrupt or oversized entry must never stop the page loading.
+    }
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!restored) return;   // don't overwrite saved turns with the empty initial state
+    try {
+      sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(turns));
+    } catch {
+      // Quota exceeded on a very long conversation — keep the chat working in memory.
+    }
+  }, [turns, restored]);
   const [message, setMessage] = useState("");
   const [agent, setAgent] = useState("");
   const [agents, setAgents] = useState<Record<string, { description: string; tools: string[] }>>({});
@@ -155,7 +192,10 @@ export default function AssistantPage() {
         </div>
         {turns.length > 0 && (
           <button
-            onClick={() => setTurns([])}
+            onClick={() => {
+              setTurns([]);
+              try { sessionStorage.removeItem(CHAT_STORAGE_KEY); } catch {}
+            }}
             className="rounded-lg border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-page)] dark:hover:bg-zinc-800"
           >
             Clear conversation
