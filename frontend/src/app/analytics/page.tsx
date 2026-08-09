@@ -99,7 +99,6 @@ export default function AnalyticsPage() {
         <ChartFrame
           title="Which skills pay above average"
           subtitle="Highest and lowest paying skills, measured against the overall average"
-          note="The spread here is small — a few hundred dollars on a six-figure average. That is the honest reading: most postings in the warehouse are generated, and the generator assigns skills independently of salary, so there is no real skill premium to find. Real postings alone are too few to carry this chart yet."
           columns={["Skill", "Avg salary", "vs average"]}
           rows={premium.map((s) => [
             s.skill_name,
