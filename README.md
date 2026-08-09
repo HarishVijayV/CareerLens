@@ -18,10 +18,11 @@ frontend.
 
 | What | Result |
 |---|---|
-| Rows processed | 200,000 → 195,959 after dedup (4,041 duplicates removed) |
+| Rows processed | 154,911 → **151,883** after dedup (3,028 duplicates removed) |
+| Of which real | **4,911** live postings from Adzuna (India + USA); the rest generated for volume |
 | Spark vs MapReduce | **Spark 57.1% faster (2.33×)** — median of 3 runs each, same aggregation |
-| MLlib salary model | GBT **R² = 0.911** vs LinearRegression baseline R² = 0.178 |
-| Warehouse | 195,959 postings + 980,447 skill rows in Postgres |
+| MLlib salary model | trained on REAL postings only: GBT **R² = 0.617** vs baseline **0.475** |
+| Warehouse | 151,883 postings + **737,525** skill rows in Postgres |
 | dbt | 5 models, **17/17 data-quality tests passing** |
 | Tests | 33 Python tests passing |
 | Airflow | DAG parses, 7 tasks, 0 import errors |
@@ -73,6 +74,7 @@ cd pipeline && python run_pipeline.py
 | Doc | What it covers |
 |---|---|
 | [HANDBOOK.md](HANDBOOK.md) | **The complete guide** — every tech, why/how, hosting changes, interview answers |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | **Putting it online** — click-by-click from a fresh cloud account to a live HTTPS site, including every URL, redirect and cookie that must change |
 | [SETUP_CHECKLIST.md](SETUP_CHECKLIST.md) | **What you need to do** — API keys, first run |
 | [docs/PROJECT_STORY.md](docs/PROJECT_STORY.md) | The pitch + how to answer "walk me through this" |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, service map, request/data flow |

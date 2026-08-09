@@ -50,22 +50,61 @@ and that's precisely the point the MapReduce benchmark below proves.
 
 | Metric | Value |
 |---|---|
-| Raw rows in | 200,000 |
-| After dedup | 195,959 (4,041 duplicates removed) |
+| Raw rows in | 154,911 (4,911 live Adzuna postings + 150,000 generated) |
+| After dedup | 151,883 (3,028 duplicates removed) |
 | Spark vs MapReduce | **57.1% faster / 2.33× speedup** (median of 3 runs each) |
-| MLlib GBT | R² = 0.911, RMSE $11,489 |
-| LinearRegression baseline | R² = 0.178, RMSE $34,992 |
-| Warehouse rows | 195,959 postings + 980,447 skill rows |
+| MLlib GBT (real postings only) | R² = 0.617, RMSE $36,671 |
+| LinearRegression baseline | R² = 0.475, RMSE $42,916 |
+| Warehouse rows | 151,883 postings + 737,525 skill rows |
 | dbt | 5 models, 17/17 tests passing |
 
 Committed as JSON in `pipeline/data/`. Reproduce with `python run_pipeline.py --benchmark`.
 
-**One honest caveat worth raising yourself in an interview:** the GBT model reports
-`seniority` at ~1.0 feature importance, because the synthetic generator computes salary
-almost entirely from seniority. The model correctly recovered the data-generating
-process — which is a good sanity check, but it also means R²=0.911 measures the
-generator, not the real world. On real postings you'd expect a lower R² and a much richer
-importance spread. Saying that before you're asked is worth more than the number itself.
+**Why the model trains on real postings only — and why the lower score is the better
+result.** Trained on all 151,883 rows it scored R²=0.898, which looked excellent and meant
+nothing: 96% of the feature importance was `seniority`, because that is precisely how the
+synthetic generator computes salary. The model had recovered the generator, not the job
+market.
+
+Retrained on the 2,992 live postings that carry a salary, R² falls to 0.617 — and three
+things improve. `region` becomes the dominant feature at 72%, which is a true fact about
+the world (a US role pays multiples of an Indian one) rather than an artefact. GBT now
+beats the linear baseline by 4× the margin (+0.142 vs +0.033), so the complex model earns
+its place instead of tying. And the residual error is real market noise rather than an
+unlearned formula.
+
+*Prefer the number you can defend.* A high score that only proves your generator was
+deterministic dies on the first follow-up question. Every posting is still scored —
+`--real-only` narrows what the model LEARNS from, never what it is applied to.
+
+### Ingestion is driven by the user's profile
+
+`job_apis.py --from-profiles` reads every user's target roles and countries straight from
+the database and unions them into the Adzuna query. Before that flag the term list was
+hardcoded, so the profile page claimed to "drive which jobs get fetched" while doing
+nothing of the kind — a user targeting MLOps in Bangalore got a warehouse of roles they
+would never apply to.
+
+Read from the database rather than the API because the pipeline is a trusted backend
+process that already holds the credentials, and an authenticated per-user endpoint would
+mean minting a token for a batch job with no user. Defaults are always unioned in, so an
+empty profile still fetches something and market-wide analytics keep a broad sample.
+
+### Indexes are built by dbt, not by hand
+
+The analytics schema had **zero** indexes: dbt creates tables and never indexes them, so
+every search sequentially scanned 151,883 rows and the profile-ranking subquery scanned
+737,525 bridge rows per row it touched. Search took ~2.0s and exhausted Postgres' shared
+memory under load.
+
+They are attached as dbt **post-hooks** (`macros/index_marts.sql`) rather than created
+manually, because a `table` materialisation is dropped and recreated on every run — an
+index made by hand survives until the next `dbt run` and then silently disappears. Each
+index is justified by a specific query rather than added speculatively, since every index
+costs write time on each load, and the macro no-ops on Snowflake, which has no
+`CREATE INDEX`.
+
+Result: **2.0s → 0.52s**, a 3.8× improvement, with all 17 tests still passing.
 
 ## 4. The MapReduce vs Spark benchmark — `pipeline/mapreduce_demo/`
 
