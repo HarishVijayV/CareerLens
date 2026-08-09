@@ -2,9 +2,32 @@
 
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { api, Job } from "@/lib/api";
+import { api, Job, Profile } from "@/lib/api";
 
 const PAGE_SIZE = 20;
+
+// The profile stores Adzuna country CODES; the warehouse stores region NAMES. Without an
+// explicit map the two never compare equal and profile ranking silently does nothing —
+// the worst kind of bug, because the UI still says it's matching your profile.
+const COUNTRY_TO_REGION: Record<string, string> = {
+  in: "India",
+  us: "North America",
+  ca: "North America",
+  gb: "Europe",
+  de: "Europe",
+  au: "Asia Pacific",
+  sg: "Asia Pacific",
+};
+
+function profileRegions(profile: Profile | null): string[] {
+  if (!profile) return [];
+  const regions = (profile.countries || "")
+    .split(",")
+    .map((c) => COUNTRY_TO_REGION[c.trim().toLowerCase()])
+    .filter(Boolean);
+  // Remote roles are location-independent, so they belong with whatever you picked.
+  return Array.from(new Set([...regions, "Remote"]));
+}
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -23,6 +46,16 @@ export default function JobsPage() {
   const [payBand, setPayBand] = useState("");
   const [region, setRegion] = useState("");
   const [sourceType, setSourceType] = useState("");
+
+  // Profile-driven relevance, on by default.
+  //
+  // Ranking, not filtering: someone in India should see Indian roles first — clicking a
+  // US listing and being told "not available in your region" is a wasted click — but
+  // hiding US roles outright would be wrong for exactly the same person, who is moving
+  // there for a Master's. Update the profile and the priority follows; the toggle exists
+  // for the moment you want to browse the whole market anyway.
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [matchProfile, setMatchProfile] = useState(true);
 
   const [q, setQ] = useState("");
   const [skill, setSkill] = useState("");
@@ -75,6 +108,8 @@ export default function JobsPage() {
         source_type: sourceType,
         remote_only: remoteOnly,
         min_salary: minSalary ? Number(minSalary) : undefined,
+        prioritize_regions: matchProfile ? profileRegions(profile).join(",") : undefined,
+        prioritize_skills: matchProfile ? (profile?.skills ?? undefined) : undefined,
         limit: PAGE_SIZE,
         offset: newOffset,
       });
@@ -90,9 +125,24 @@ export default function JobsPage() {
 
   useEffect(() => {
     api.jobFilters().then(setFilters).catch(() => {});
+    // Load the profile, then re-search with it. The first load runs without it rather
+    // than blocking the page on a second request — results appear immediately and
+    // re-order once the profile lands.
+    api
+      .getProfile()
+      .then((p) => setProfile(p))
+      .catch(() => {});
     load(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-rank whenever the profile arrives or the toggle flips. Without this the profile
+  // would load into state and change nothing until the user happened to press Search —
+  // the feature would look broken precisely when it first matters.
+  useEffect(() => {
+    if (profile) load(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, matchProfile]);
 
   const money = (v: number | null) => (v ? `$${v.toLocaleString()}` : "—");
 
@@ -134,6 +184,23 @@ export default function JobsPage() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+        </label>
+
+        <label
+          className="flex cursor-pointer select-none items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
+          title={
+            profile
+              ? `Ranks ${profileRegions(profile).join(", ") || "your regions"} first, then roles wanting your skills`
+              : "Loading your profile…"
+          }
+        >
+          <input
+            type="checkbox"
+            checked={matchProfile}
+            onChange={(e) => setMatchProfile(e.target.checked)}
+            className="h-4 w-4"
+          />
+          Match my profile
         </label>
 
         <label className="flex flex-col gap-1 text-sm text-zinc-500">

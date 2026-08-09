@@ -119,6 +119,14 @@ def search_jobs(
     source_type: str | None = Query(
         None, description="real = live job-board postings only | synthetic = generated only"
     ),
+    prioritize_regions: str | None = Query(
+        None,
+        description="comma-separated regions to rank first, e.g. 'India,Remote'. Ranks, "
+        "does not filter — set `region` to exclude outright.",
+    ),
+    prioritize_skills: str | None = Query(
+        None, description="comma-separated skills; postings needing more of them rank higher",
+    ),
     limit: int = Query(25, le=100),
     offset: int = 0,
 ):
@@ -163,12 +171,54 @@ def search_jobs(
 
     clause = " AND ".join(where)
 
+    # ---- profile-driven relevance -------------------------------------------------
+    # RANK by the profile rather than FILTER by it. A user in India should see Indian
+    # roles first — clicking a US listing and being told "not available in your region"
+    # is a wasted click — but hard-filtering would hide the US roles they are moving
+    # towards, and the priority has to follow the profile when it changes rather than be
+    # baked in here.
+    #
+    # Region is a plain equality test; skills need the bridge table, and counting matches
+    # (rather than requiring one) means a posting wanting 3 of your skills outranks one
+    # wanting 1, without excluding anything.
+    # A bare "0" cannot be used as the no-op rank: Postgres reads a plain integer in
+    # ORDER BY as a COLUMN POSITION, so `ORDER BY is_real DESC, 0 DESC` fails with
+    # "ORDER BY position 0 is not in select list". The ranks are therefore added to the
+    # ORDER BY only when they are actually requested, and NULL::int stands in for the
+    # SELECT column so the response shape stays the same either way.
+    order_terms = ["f.is_real DESC"]
+
+    region_rank = "NULL::int"
+    if prioritize_regions:
+        regions = [r.strip() for r in prioritize_regions.split(",") if r.strip()]
+        if regions:
+            params["prioritize_regions"] = regions
+            region_rank = "CASE WHEN f.region = ANY(:prioritize_regions) THEN 1 ELSE 0 END"
+            order_terms.append(f"{region_rank} DESC")
+
+    skill_rank = "NULL::int"
+    if prioritize_skills:
+        skills = [s.strip() for s in prioritize_skills.split(",") if s.strip()]
+        if skills:
+            params["prioritize_skills"] = skills
+            skill_rank = """(
+                SELECT COUNT(*) FROM analytics.bridge_posting_skill pb
+                JOIN analytics.dim_skill ps ON ps.skill_id = pb.skill_id
+                WHERE pb.posting_id = f.posting_id AND ps.skill_name = ANY(:prioritize_skills)
+            )"""
+            order_terms.append(f"{skill_rank} DESC")
+
+    order_terms.append("f.salary DESC NULLS LAST")
+    order_by = ", ".join(order_terms)
+
     jobs = _rows(
         f"""
         SELECT f.posting_id, f.title, c.company_name, f.location, f.region,
                f.seniority, f.remote, f.salary, f.posted_month,
                f.predicted_salary, f.salary_vs_market, f.pay_band,
-               f.is_real, f.source, f.url
+               f.is_real, f.source, f.url,
+               {region_rank} AS region_match,
+               {skill_rank} AS skill_matches
         FROM analytics.fact_job_posting f
         LEFT JOIN analytics.dim_company c ON c.company_id = f.company_id
         WHERE {clause}
@@ -178,9 +228,10 @@ def search_jobs(
         -- under generated rows that happened to score higher, which made the job board
         -- look impressive and be useless.
         --
-        -- Salary remains the tiebreak WITHIN each group, so the ordering people expect
-        -- still holds; provenance just outranks it.
-        ORDER BY f.is_real DESC, f.salary DESC NULLS LAST
+        -- Then the profile: your region, then how many of your skills the role wants.
+        -- Salary is the last tiebreak, so the ordering people expect still holds inside
+        -- each relevance group.
+        ORDER BY {order_by}
         LIMIT :limit OFFSET :offset
         """,
         **params,
