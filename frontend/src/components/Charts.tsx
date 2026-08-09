@@ -23,12 +23,19 @@ import { useId, useState } from "react";
 export function ChartFrame({
   title,
   subtitle,
+  note,
   children,
   rows,
   columns,
 }: {
   title: string;
   subtitle?: string;
+  /** A caveat about what the chart shows, printed UNDER the plot in muted text.
+   *
+   *  Separate from `subtitle` deliberately: a subtitle says what the chart IS and belongs
+   *  above it; a note says what NOT to conclude from it and only makes sense once the
+   *  reader has looked. Hidden in table view, where the numbers speak for themselves. */
+  note?: string;
   children: React.ReactNode;
   rows?: (string | number | null)[][];
   columns?: string[];
@@ -79,6 +86,12 @@ export function ChartFrame({
         </div>
       ) : (
         children
+      )}
+
+      {note && !showTable && (
+        <p className="mt-3 border-t border-zinc-100 pt-2.5 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800">
+          {note}
+        </p>
       )}
     </section>
   );
@@ -323,6 +336,144 @@ export function StatTile({
       <div className="text-sm font-medium text-zinc-500">{label}</div>
       <div className="mt-1 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</div>
       {hint && <div className="mt-1 text-xs text-zinc-400">{hint}</div>}
+    </div>
+  );
+}
+
+/**
+ * DIVERGING BAR — for "above or below a baseline", which a plain bar cannot express.
+ *
+ * The skill-premium data is a *deviation*: how far each skill's average salary sits from
+ * the overall average. Drawn as an ordinary bar, every value looked positive and the
+ * reader had to compare bar lengths to infer a sign that the data states outright. The
+ * form was answering a different question than the data asked.
+ *
+ * Diverging is the documented form for polarity: two opposed hues around a NEUTRAL
+ * midpoint, bars growing left or right from a zero line. Blue/red, not blue/aqua — two
+ * cool hues read as "more/less of the same thing" rather than as opposites, and the
+ * midpoint must read as *nothing*, which only a gray does.
+ *
+ * Palette validated before use, both modes, all six checks passing:
+ *   light #2a78d6 ↔ #e34948   CVD ΔE 21.6 · normal ΔE 32.3
+ *   dark  #3987e5 ↔ #e66767   CVD ΔE 19.2 · normal ΔE 29.0
+ *
+ * Sign is never carried by color alone — every bar is direct-labelled with its signed
+ * value, and the two sides sit on opposite halves of the axis. Colorblind readers get the
+ * side and the label; the hue is reinforcement, not the message.
+ */
+export function DivergingBar({
+  data,
+  format = (v: number) => v.toLocaleString(),
+  height = 22,
+}: {
+  data: { label: string; value: number }[];
+  format?: (v: number) => string;
+  height?: number;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+
+  if (!data.length) {
+    return <p className="py-12 text-center text-xs text-zinc-500">No data yet.</p>;
+  }
+
+  const labelWidth = 108;
+  const plotWidth = 380;
+  const half = plotWidth / 2;
+  const zeroX = labelWidth + half;
+  const gap = 8;
+  const radius = 4;
+
+  // Scale on the LARGEST ABSOLUTE value so both arms share one scale. Scaling each side to
+  // its own max would make a +$400 bar and a -$400 bar different lengths — the exact
+  // comparison the form exists to make.
+  const maxAbs = Math.max(...data.map((d) => Math.abs(d.value)), 1);
+
+  return (
+    <div className="relative overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${labelWidth + plotWidth + 80} ${data.length * (height + gap)}`}
+        className="w-full"
+        style={{ minWidth: 420 }}
+        role="img"
+        aria-label="diverging bar chart: salary premium versus the overall average"
+      >
+        {data.map((d, i) => {
+          const y = i * (height + gap);
+          const w = Math.max((Math.abs(d.value) / maxAbs) * (half - 8), 2);
+          const positive = d.value >= 0;
+          // 1px clear of the zero line so a bar never sits on top of the baseline.
+          const x = positive ? zeroX + 1 : zeroX - 1 - w;
+
+          // Rounded on the DATA end only; the baseline end stays square so bars read as
+          // anchored to zero rather than floating.
+          const path = positive
+            ? `M${x},${y} H${x + w - radius} A${radius},${radius} 0 0 1 ${x + w},${y + radius} V${y + height - radius} A${radius},${radius} 0 0 1 ${x + w - radius},${y + height} H${x} Z`
+            : `M${x + w},${y} H${x + radius} A${radius},${radius} 0 0 0 ${x},${y + radius} V${y + height - radius} A${radius},${radius} 0 0 0 ${x + radius},${y + height} H${x + w} Z`;
+
+          return (
+            <g
+              key={d.label}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+              style={{ cursor: "default" }}
+            >
+              {/* Invisible full-width hit target — hovering a short bar must not require
+                  pixel precision. */}
+              <rect x={0} y={y - gap / 2} width={labelWidth + plotWidth + 80} height={height + gap} fill="transparent" />
+
+              <text
+                x={labelWidth - 10}
+                y={y + height / 2}
+                textAnchor="end"
+                dominantBaseline="central"
+                className="fill-zinc-600 dark:fill-zinc-400"
+                style={{ fontSize: 12.5 }}
+              >
+                {d.label}
+              </text>
+
+              <path
+                d={path}
+                className={
+                  positive
+                    ? "fill-[#2a78d6] dark:fill-[#3987e5]"
+                    : "fill-[#e34948] dark:fill-[#e66767]"
+                }
+                opacity={hover === null || hover === i ? 1 : 0.45}
+              />
+
+              {/* Direct label on every bar, outside the mark. This is the secondary
+                  encoding that keeps the sign readable without color. */}
+              <text
+                x={positive ? x + w + 7 : x - 7}
+                y={y + height / 2}
+                textAnchor={positive ? "start" : "end"}
+                dominantBaseline="central"
+                className="fill-zinc-500"
+                style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}
+              >
+                {d.value >= 0 ? "+" : "−"}
+                {format(Math.abs(d.value))}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* The zero line, drawn LAST so it sits above the bars. Neutral gray: a hue here
+            would read as a third category. */}
+        <line
+          x1={zeroX}
+          x2={zeroX}
+          y1={0}
+          y2={data.length * (height + gap) - gap}
+          className="stroke-zinc-400 dark:stroke-zinc-600"
+          strokeWidth={1}
+        />
+      </svg>
+
+      <p className="mt-2 text-center text-[11px] text-zinc-400">
+        ← below the overall average · above →
+      </p>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { BarChart, ChartFrame, LineChart, StatTile } from "@/components/Charts";
+import { BarChart, ChartFrame, DivergingBar, LineChart, StatTile } from "@/components/Charts";
 import { api } from "@/lib/api";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -98,7 +98,8 @@ export default function AnalyticsPage() {
 
         <ChartFrame
           title="Which skills pay above average"
-          subtitle="Average salary of postings requiring each skill"
+          subtitle="How far each skill's average sits from the overall average salary"
+          note="The spread here is small — a few hundred dollars on a six-figure average. That is the honest reading: most postings in the warehouse are generated, and the generator assigns skills independently of salary, so there is no real skill premium to find. Real postings alone are too few to carry this chart yet."
           columns={["Skill", "Avg salary", "vs average"]}
           rows={premium.map((s) => [
             s.skill_name,
@@ -106,8 +107,15 @@ export default function AnalyticsPage() {
             `${s.premium_vs_average >= 0 ? "+" : ""}${money(s.premium_vs_average)}`,
           ])}
         >
-          <BarChart
-            data={premium.slice(0, 12).map((s) => ({ label: s.skill_name, value: s.avg_salary }))}
+          {/* DIVERGING, not a plain bar. The data is a deviation — how far each skill sits
+              from the overall average — and a plain bar drew every value as a positive
+              length, so the reader had to infer a sign the data states outright. Sorted
+              highest-to-lowest so the two arms form one continuous shape. */}
+          <DivergingBar
+            data={[...premium]
+              .sort((a, b) => b.premium_vs_average - a.premium_vs_average)
+              .slice(0, 12)
+              .map((s) => ({ label: s.skill_name, value: s.premium_vs_average }))}
             format={money}
           />
         </ChartFrame>
