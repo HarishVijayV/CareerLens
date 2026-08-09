@@ -254,16 +254,18 @@ def orchestrate(user_message: str) -> dict:
             # An observed run delegated to job_matcher twice in one answer. A specialist
             # asked the same thing returns the same thing, so the repeat is pure cost —
             # and it eats the delegation budget that a DIFFERENT specialist needed.
-            already = next(
-                (d for d in delegations if d["agent"] == agent_name and d["question"] == question),
-                None,
-            )
+            # Match on the AGENT, not the agent-plus-question. Matching both let the
+            # orchestrator ask job_matcher twice by rewording the question slightly, and a
+            # specialist asked about the same user twice returns the same thing — pure
+            # cost, and it eats the delegation budget a DIFFERENT specialist needed.
+            already = next((d for d in delegations if d["agent"] == agent_name), None)
             if already:
                 messages.append(
                     provider.tool_result_message(
                         call,
                         json.dumps({
-                            "note": f"Already asked {agent_name} this exact question.",
+                            "note": f"{agent_name} has already answered in this "
+                            "request; its reply is below. Use it — do not ask again.",
                             "answer": already["answer"],
                         }),
                     )

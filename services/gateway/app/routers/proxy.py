@@ -45,7 +45,14 @@ _STRIP_REQUEST_HEADERS = {
 }
 _STRIP_RESPONSE_HEADERS = {"content-length", "content-encoding", "connection", "transfer-encoding"}
 
-_client = httpx.AsyncClient(timeout=60.0)
+# 60s was too short for the agent service, where one question is a chain of LLM calls:
+# a team answer measured 90s and the user saw "the assistant call failed" for a request
+# that was still running perfectly.
+#
+# The per-tool budget in agents/base.py is the real fix — this is the backstop, sized so
+# a slow-but-working answer arrives rather than being cut off. Not unlimited: a genuinely
+# stuck upstream must still fail rather than hold a connection open forever.
+_client = httpx.AsyncClient(timeout=180.0)
 
 
 _METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]

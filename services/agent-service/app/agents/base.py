@@ -20,12 +20,26 @@ compare them to see exactly what a framework adds and what it hides.
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from dataclasses import dataclass, field
 
 from app.llm.provider import LLMResponse, get_llm_provider
 from app.tools.registry import dispatch_tool_call
 
 MAX_TOOL_ITERATIONS = 6
+
+# How many times a single tool may run in one agent run.
+#
+# The identical-call cache below only catches calls with the SAME arguments. A model that
+# keeps searching with slightly different wording defeats it completely: an observed run
+# issued search_jobs 30 times — "Machine Learning Engineer", then "ML Engineer", then
+# "Machine Learning", each a distinct signature — and took 90 seconds, past the gateway's
+# 60-second timeout, so the user saw "the assistant call failed" for a request that was
+# still working.
+#
+# Five searches is already generous for picking three jobs. The cap converts a runaway
+# loop into a slightly-less-informed answer, which is strictly better than no answer.
+MAX_CALLS_PER_TOOL = 5
 
 
 @dataclass
@@ -39,6 +53,7 @@ class AgentRun:
     iterations: int = 0
     stopped_early: bool = False
     duplicate_calls: int = 0   # repeats served from cache instead of re-executed
+    budget_hits: int = 0       # calls refused for exceeding MAX_CALLS_PER_TOOL
 
 
 class Agent:
@@ -75,6 +90,8 @@ class Agent:
         # information. Serving the cached result — and telling the model it's cached —
         # both cuts cost and nudges it to move on.
         seen_calls: dict[str, str] = {}
+        # Per-tool counter, the backstop for when varied arguments defeat the cache.
+        calls_per_tool: dict[str, int] = defaultdict(int)
 
         for iteration in range(1, self.max_iterations + 1):
             trace.iterations = iteration
@@ -91,6 +108,21 @@ class Agent:
 
             for tool_call in response.tool_calls:
                 signature = f"{tool_call.name}:{json.dumps(tool_call.arguments, sort_keys=True)}"
+
+                if calls_per_tool[tool_call.name] >= MAX_CALLS_PER_TOOL:
+                    # Refuse, and say what to do instead. A bare error invites a retry with
+                    # different wording, which is the behaviour we are trying to stop.
+                    result = json.dumps(
+                        {
+                            "error": f"'{tool_call.name}' has already run "
+                            f"{MAX_CALLS_PER_TOOL} times in this request, which is the "
+                            "limit. Answer using the results you already have — do not "
+                            "rephrase and search again.",
+                        }
+                    )
+                    trace.budget_hits += 1
+                    messages.append(provider.tool_result_message(tool_call, result))
+                    continue
 
                 if signature in seen_calls:
                     cached = seen_calls[signature]
@@ -109,6 +141,7 @@ class Agent:
                         tool_call.name, tool_call.arguments, allowed_tools=self.allowed_tools
                     )
                     seen_calls[signature] = result
+                    calls_per_tool[tool_call.name] += 1
                     trace.tool_calls.append(
                         {
                             "tool": tool_call.name,

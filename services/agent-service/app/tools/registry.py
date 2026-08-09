@@ -54,9 +54,35 @@ def search_jobs(
     if not include_sample_postings:
         params["source_type"] = "real"
     params["limit"] = min(limit, 25)
+
     resp = httpx.get(f"{JOBS_SERVICE_URL}/jobs/search", params=params, timeout=_TIMEOUT)
     resp.raise_for_status()
-    return json.dumps(resp.json())
+    data = resp.json()
+
+    # Broaden once, here, instead of letting the model do it by guessing.
+    #
+    # `q` matches the job TITLE, and against only ~4,900 live postings an exact title like
+    # "Junior Data Scientist" or "AI Engineer India" usually matches nothing. A measured
+    # run made 29 searches of which 21 returned zero: the model was behaving sensibly —
+    # search, find nothing, reword — but each reword is a fresh signature that defeats the
+    # duplicate cache, and the whole request took 90s and blew the gateway timeout.
+    #
+    # Dropping `q` while keeping skill/seniority/region is the same broadening a person
+    # would do, done once and deterministically. Saying we broadened matters as much as
+    # doing it: an empty result invites another guess, whereas results plus "this is the
+    # broader set" is something the model can act on.
+    if not data.get("total") and q:
+        broadened = {k: v for k, v in params.items() if k != "q"}
+        retry = httpx.get(f"{JOBS_SERVICE_URL}/jobs/search", params=broadened, timeout=_TIMEOUT)
+        retry.raise_for_status()
+        data = retry.json()
+        data["note"] = (
+            f"No job TITLE matched '{q}', so the title filter was dropped and the "
+            "remaining filters kept. These are the closest available postings — use them "
+            "rather than searching again with different wording."
+        )
+
+    return json.dumps(data)
 
 
 def get_job(posting_id: str) -> str:
