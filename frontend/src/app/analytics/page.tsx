@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { BarChart, ChartFrame, DivergingBar, LineChart, Lollipop, StatTile } from "@/components/Charts";
+import { BarChart, ChartFrame, LineChart, Lollipop, StatTile } from "@/components/Charts";
 import { api } from "@/lib/api";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -33,7 +33,6 @@ export default function AnalyticsPage() {
       api.analytics<typeof bySeniority>("salary-by-seniority").then(setBySeniority),
       api.analytics<typeof byRegion>("salary-by-region").then(setByRegion),
       api.analytics<typeof byMonth>("postings-by-month").then(setByMonth),
-      api.analytics<typeof premium>("skill-premium").then(setPremium),
     ]).catch((e) => setError(e.message));
   }, []);
 
@@ -96,42 +95,17 @@ export default function AnalyticsPage() {
           />
         </ChartFrame>
 
-        <ChartFrame
-          title="Which skills pay above average"
-          subtitle="Highest and lowest paying skills, measured against the overall average"
-          columns={["Skill", "Avg salary", "vs average"]}
-          rows={premium.map((s) => [
-            s.skill_name,
-            money(s.avg_salary),
-            `${s.premium_vs_average >= 0 ? "+" : ""}${money(s.premium_vs_average)}`,
-          ])}
-        >
-          {/* DIVERGING, not a plain bar. The data is a deviation — how far each skill sits
-              from the overall average — and a plain bar drew every value as a positive
-              length, so the reader had to infer a sign the data states outright. Sorted
-              highest-to-lowest so the two arms form one continuous shape. */}
-          {/* Take the top AND bottom of the range, not the top 12.
-              Sorting descending and slicing 12 returned twelve positives, so every bar sat
-              on the right of the zero line — the left half was empty (the gap) and there
-              was no red anywhere, which made a diverging chart look like an ordinary blue
-              bar chart. A diverging form has to show BOTH arms or it is the wrong form. */}
-          <DivergingBar
-            data={(() => {
-              const sorted = [...premium].sort(
-                (a, b) => b.premium_vs_average - a.premium_vs_average
-              );
-              const ends =
-                sorted.length <= 10
-                  ? sorted
-                  : [...sorted.slice(0, 6), ...sorted.slice(-4)];
-              return ends.map((s) => ({
-                label: s.skill_name,
-                value: s.premium_vs_average,
-              }));
-            })()}
-            format={money}
-          />
-        </ChartFrame>
+        {/* The skill-premium chart was removed, not hidden.
+            It reported PostgreSQL at -$50,899 from 19 postings and Docker at -$25,363 from
+            23 — differences that large from samples that small are noise, and a chart
+            nobody can defend costs more credibility than the insight was worth. Skills are
+            only extracted from postings whose description survived Adzuna's truncation
+            (~20% of them), so the per-skill samples are a fraction of the 5,397 and skew
+            toward whichever listings happened to be verbose.
+            The endpoint and the DivergingBar component both remain — bring it back with a
+            HAVING floor around 100 postings, where only Python, SQL, Spark, AWS, Java,
+            Azure, GCP and Scala survive and every number is supportable. */}
+
 
         <ChartFrame
           title="Salary by seniority"
