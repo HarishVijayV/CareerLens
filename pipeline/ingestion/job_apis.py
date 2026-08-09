@@ -68,12 +68,13 @@ ADZUNA_PAGES_PER_TERM = 5  # 50 results/page; Adzuna's free tier allows ~250 cal
 # a bare number. Loading those into one `salary` column made every Indian role look like a
 # $3M outlier, which then skewed the MLlib training set and every salary chart.
 #
-# Rates are pinned, not fetched. A live FX call would make the same input produce different
+# Rates are pinned, not fetched, and reviewed by hand when they drift far enough to matter
+# (83 -> 95 for INR). A live FX call would make the same input produce different
 # output on different days, so a pipeline re-run could no longer be compared to the previous
 # one — and a rate API is one more thing that can be down. Approximate-but-stable beats
 # precise-but-irreproducible here; the number is a comparison aid, not an accounting figure.
 FX_TO_USD = {
-    "adzuna_in": 1 / 83.0,   # INR, mid-2024
+    "adzuna_in": 1 / 95.0,   # INR
     "adzuna_gb": 1.27,       # GBP
     "adzuna_us": 1.0,
     "remotive": 1.0,
@@ -373,6 +374,70 @@ def fetch_arbeitnow(terms: list[str]) -> list[dict]:
     ]
 
 
+def terms_from_profiles(database_url: str, fallback: list[str]) -> tuple[list[str], list[str]]:
+    """Build the search terms and countries from what USERS actually want.
+
+    The point of the whole ingest is to fetch jobs somebody would apply to. A hardcoded
+    term list fetches whatever the author guessed months ago, so a user whose profile says
+    "MLOps Engineer, Bangalore" gets a warehouse full of roles they'd never take — and the
+    profile page claims to "drive which jobs get fetched" while doing nothing of the kind.
+
+    Read straight from the database rather than through the API because the pipeline is a
+    trusted backend process that already holds the credentials, and calling an
+    authenticated per-user endpoint would mean minting a token for a batch job that has no
+    user. `load_to_warehouse.py` connects the same way.
+
+    The fallback list is unioned in, never replaced: with an empty profile the ingest must
+    still fetch something, and a warehouse with only one user's niche roles makes every
+    market-wide analytics chart meaningless.
+    """
+    try:
+        import psycopg
+    except ImportError:
+        print("  psycopg not installed — using default terms")
+        return fallback, []
+
+    terms: list[str] = []
+    countries: list[str] = []
+    try:
+        with psycopg.connect(database_url, connect_timeout=10) as conn:
+            rows = conn.execute(
+                "SELECT target_roles, headline, countries FROM user_profiles"
+            ).fetchall()
+    except Exception as exc:  # noqa: BLE001 — any DB problem must not kill the ingest
+        print(f"  could not read profiles ({type(exc).__name__}) — using default terms")
+        return fallback, []
+
+    for target_roles, headline, user_countries in rows:
+        # Mirrors UserProfile.as_search_terms(): roles first, headline as a weaker signal.
+        for chunk in f"{target_roles or ''},{headline or ''}".split(","):
+            term = chunk.strip()
+            # Length guard: a headline like "Final-year B.Tech student passionate about AI"
+            # is one long sentence, and Adzuna returns nothing for it while still costing a
+            # call. Real job titles are short.
+            if 3 <= len(term) <= 40:
+                terms.append(term)
+        for code in (user_countries or "").split(","):
+            code = code.strip().lower()
+            if len(code) == 2:
+                countries.append(code)
+
+    def _dedupe(values: list[str]) -> list[str]:
+        seen, out = set(), []
+        for v in values:
+            if v.lower() not in seen:
+                seen.add(v.lower())
+                out.append(v)
+        return out
+
+    merged_terms = _dedupe(terms + fallback)
+    if terms:
+        print(f"  profile-driven: {len(_dedupe(terms))} term(s) from {len(rows)} profile(s)")
+    else:
+        print("  no usable profile terms — using defaults only")
+    return merged_terms, _dedupe(countries)
+
+
 def main(out_path: Path, terms: list[str], countries: list[str], include_europe: bool) -> None:
     print(f"Fetching real postings — terms={terms or '(all)'} countries={countries}")
 
@@ -445,11 +510,29 @@ if __name__ == "__main__":
     )
     parser.add_argument("--countries", default="in,us", help="Adzuna country codes, e.g. in,us")
     parser.add_argument("--include-europe", action="store_true", help="also query Arbeitnow")
+    parser.add_argument(
+        "--from-profiles",
+        action="store_true",
+        help="add each user's target roles and countries to the search (recommended)",
+    )
+    parser.add_argument(
+        "--database-url",
+        default=os.getenv(
+            "PIPELINE_DATABASE_URL",
+            "postgresql://careerlens:change_me@localhost:5432/careerlens",
+        ),
+        help="only used with --from-profiles",
+    )
     args = parser.parse_args()
 
-    main(
-        Path(args.out),
-        [t.strip() for t in args.terms.split(",") if t.strip()],
-        [c.strip() for c in args.countries.split(",") if c.strip()],
-        args.include_europe,
-    )
+    cli_terms = [t.strip() for t in args.terms.split(",") if t.strip()]
+    cli_countries = [c.strip() for c in args.countries.split(",") if c.strip()]
+
+    if args.from_profiles:
+        cli_terms, profile_countries = terms_from_profiles(args.database_url, cli_terms)
+        # Union, not replace: a user in India who is also applying to the US must not lose
+        # the US feed, and the default pair keeps market analytics broad enough to mean
+        # something.
+        cli_countries = sorted(set(cli_countries) | set(profile_countries))
+
+    main(Path(args.out), cli_terms, cli_countries, args.include_europe)

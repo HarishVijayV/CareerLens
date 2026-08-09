@@ -30,6 +30,38 @@ export default function JobsPage() {
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [minSalary, setMinSalary] = useState("");
 
+  // posting_id -> true once tracked. Kept per-render rather than re-fetching applications
+  // on every search: the button only needs to stop offering to add the same job twice.
+  const [applied, setApplied] = useState<Record<string, boolean>>({});
+  const [applying, setApplying] = useState<string | null>(null);
+
+  /** Open the real listing AND record the application in one action.
+   *
+   * These belong together. Applying on the job board and then remembering to log it here
+   * is exactly the step people skip, which is how an application tracker ends up emptier
+   * than the truth and its funnel chart becomes fiction.
+   *
+   * The tab is opened FIRST and synchronously inside the click handler — opening it after
+   * `await` makes the browser treat it as an unrequested popup and block it.
+   */
+  async function applyTo(job: Job) {
+    if (job.url) window.open(job.url, "_blank", "noopener,noreferrer");
+    setApplying(job.posting_id);
+    try {
+      await api.createApplication({
+        company: job.company_name ?? "Unknown",
+        role: job.title ?? undefined,
+        posting_id: job.posting_id,
+        status: "applied",
+      });
+      setApplied((prev) => ({ ...prev, [job.posting_id]: true }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save the application");
+    } finally {
+      setApplying(null);
+    }
+  }
+
   async function load(newOffset = 0) {
     setLoading(true);
     setError(null);
@@ -213,6 +245,7 @@ export default function JobsPage() {
               <th className="px-4 py-2.5 font-medium" title="Spark MLlib prediction vs the advertised salary">
                 vs market
               </th>
+              <th className="px-4 py-2.5 text-right font-medium">Apply</th>
             </tr>
           </thead>
           <tbody>
@@ -286,11 +319,39 @@ export default function JobsPage() {
                     <span className="text-[10px] text-zinc-400">—</span>
                   )}
                 </td>
+
+                <td className="px-4 py-2 text-right">
+                  {applied[job.posting_id] ? (
+                    <span
+                      className="text-xs text-emerald-700 dark:text-emerald-400"
+                      title="Added to your Applications — track its status there"
+                    >
+                      ✓ Tracked
+                    </span>
+                  ) : job.is_real ? (
+                    <button
+                      onClick={() => applyTo(job)}
+                      disabled={applying === job.posting_id}
+                      className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    >
+                      {applying === job.posting_id ? "…" : "Apply"}
+                    </button>
+                  ) : (
+                    // Generated postings have nowhere to apply. A disabled-looking dash is
+                    // honest; an Apply button that opened nothing would be worse than none.
+                    <span
+                      className="text-xs text-zinc-400"
+                      title="Generated posting — no real listing to apply to"
+                    >
+                      —
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
             {!jobs.length && !loading && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-zinc-500">
                   No postings match these filters.
                 </td>
               </tr>

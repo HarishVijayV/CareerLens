@@ -105,7 +105,13 @@ def main() -> None:
              "Data Engineer,Analytics Engineer,Machine Learning Engineer,Data Scientist,"
              "Data Analyst,Backend Engineer,Software Engineer,Business Intelligence,"
              "Big Data Engineer,MLOps Engineer",
-             "--countries", "in,us"],
+             "--countries", "in,us",
+             # Union each user's target roles and countries into the search. The profile
+             # page says it "drives which jobs get fetched" — before this flag, it didn't:
+             # the terms above were the author's guess, so a user targeting MLOps in
+             # Bangalore got a warehouse of roles they would never apply to. The defaults
+             # stay in the union so market-wide analytics keep a broad enough sample.
+             "--from-profiles"],
         )
 
     if should("spark"):
