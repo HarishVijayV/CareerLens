@@ -110,6 +110,19 @@ the agents called is shown with the answer, so nothing is unauditable.
 in LaTeX, and can compile it to PDF. Every version is kept, so an AI rewrite can never
 destroy your original and you can compare versions.
 
+**Get told when a matching job appears.** A bell in the top bar shows unread job matches
+found by the pipeline. In-app rather than email, deliberately: the match consumer fires
+once per matching posting, so a night where the pipeline finds 200 relevant jobs would
+send 200 separate emails — the same information delivered in the most annoying possible
+way. A badge reading "12" carries it at a glance and needs no SMTP provider at all.
+
+Matching is per profile: **two or more of your skills overlap, OR your target role appears
+in the title**. Two accounts on the same data get different notifications, which is the
+whole point — one `posting.discovered` event, evaluated independently against every
+profile. Duplicates are stopped by a unique constraint on (user_id, posting_id), because
+every pipeline run republishes postings you have already been told about, and a consumer
+restarts and forgets while a constraint does not.
+
 **Track applications from your inbox.** Connect Gmail once, and a background worker reads
 the last 30 days of mail, finds messages from recruiting systems, and classifies each as
 applied, rejected, interview or offer. A funnel chart shows how far you got at each stage.
@@ -1063,6 +1076,7 @@ nobody imports the wrong module; across containers it is enforced by the network
 | **jobs-service** | 8003 | Job search and analytics queries, with Redis caching | Job board and charts |
 | **worker-service** | — | Celery worker. Gmail sync and other slow jobs. No HTTP port — it pulls work from a queue | Inbox tracking |
 | **mcp-server** | 8004 | Exposes job data to external AI clients over MCP. Isolated network | External AI access only |
+| **notification-service** | — | OUTBOUND channels only (email/SMS providers). In-app notifications are rows in auth-service, not here | Nothing today — the bell does not use it |
 | **postgres** | 5432 | App data + the `analytics.*` warehouse | Everything |
 | **redis** | 6379 | Cache, rate limiting, Celery broker | Slower; background jobs stop |
 

@@ -8,7 +8,8 @@ The short version. [HANDBOOK.md](HANDBOOK.md) is the long one; read that when yo
 ## What it is
 
 Upload your resume → it finds real jobs you can apply to, scores how well you match,
-rewrites your resume for a role, and tracks applications by reading your Gmail.
+rewrites your resume for a role, tracks applications by reading your Gmail, and rings a
+bell when a new posting matches your profile.
 
 Underneath: a batch data pipeline, a modelled warehouse, an ML model, and six AI agents.
 
@@ -56,7 +57,7 @@ cd pipeline && python run_pipeline.py
 | **PostgreSQL** | Where everything lives — your data + the warehouse. |
 | **Redis** | Cache, rate limits, job queue. Nothing permanent. |
 | **Airflow** | Schedules the pipeline daily with retries + run history. Running, **DAG paused** — see below. |
-| **Kafka** | Announces "new jobs found" so services can react. Running; 25 events verified. No consumer runs yet. |
+| **Kafka** | Announces "new jobs found". The match consumer turns those into bell notifications. Running; consumer is started by hand, not yet a service. |
 | **Snowflake** | Cloud warehouse alternative. **The only paid thing.** Not configured — dbt falls back to Postgres. |
 
 ### Backend
@@ -278,6 +279,24 @@ takes the producer down with it. A broker doesn't. That independence is the whol
 > the star schema and Redis caching."
 
 Better than claiming you needed a cluster. It shows you can size a solution to a problem.
+
+---
+
+## What is automated, and what is not
+
+Worth being exact about, because "Kafka works" and "it runs itself" are different claims:
+
+| | Automatic? | Reality |
+|---|---|---|
+| Fetching new jobs | **no** | you run `python run_pipeline.py` |
+| Airflow schedule | **no** | DAG loaded but paused, 0 runs ever |
+| Kafka broker | yes | running, 36 events in the topic |
+| Match consumer | **no** | started by hand; not a service yet |
+| Bell notifications | yes, once the consumer runs | 13 rows created and verified |
+
+The chain is proven end to end — publish, match, store, display — but nothing triggers it
+on its own. Say "the pipeline is one command and the event chain works" rather than "it
+updates daily", which is not yet true.
 
 ---
 
