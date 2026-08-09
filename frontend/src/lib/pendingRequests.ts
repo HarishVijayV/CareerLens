@@ -1,77 +1,99 @@
 /**
- * One registry of in-flight assistant requests, shared by every page.
+ * A mailbox for assistant requests, shared by every page.
  *
- * Each page used to park its own promise in its own module variable, which handled
- * "navigate away and come back" and nothing else. Send a message on Resume, switch to
- * Assistant, switch back: the Resume page remounted, found its variable had been reset by
- * its own unmount/remount cycle, and showed no spinner and no answer — while the request
- * ran to completion on the server and, for a rewrite, saved a new version. A reply that
- * arrives nowhere reads as a failure of something that actually worked.
+ * The problem this solves, in the order the bugs appeared:
  *
- * Keyed by page, so Resume and Assistant can each have a request in flight at the same
- * time without either claiming the other's answer.
+ * 1. The request lived inside the component, so navigating away destroyed the only thing
+ *    awaiting it. The server finished the work — for a rewrite it even saved a new
+ *    version — and the reply landed nowhere.
  *
- * Module scope survives client-side navigation because Next.js does not re-evaluate the
- * module — only a full page reload clears this, which is correct: that genuinely is a new
- * page and there is nothing left listening.
+ * 2. Moving the promise to module scope fixed navigating away and back, but each page had
+ *    its own variable, so Resume -> Assistant -> Resume still lost answers.
  *
- * Subscribers rather than a bare promise: a page that mounts mid-flight needs to know
- * there IS a request (to show the spinner) before it knows the answer, and more than one
- * component may care.
+ * 3. A shared registry fixed that, and still dropped the common case: if the request
+ *    COMPLETED while you were on another page, the entry was deleted on settle. Coming
+ *    back found nothing pending, subscribed to nothing, and the answer was gone. That is
+ *    the version that "didn't work in both places".
+ *
+ * So this is a MAILBOX, not a subscription list. A finished result is kept until someone
+ * collects it, and only then discarded. A page mounting at any point — before, during, or
+ * after the request — gets the answer.
+ *
+ * Keyed by page so Resume and Assistant can each have one in flight without either
+ * claiming the other's. Module scope survives client-side navigation; a full page reload
+ * clears it, which is correct, since nothing is left listening after a reload.
  */
 import type { AgentAnswer } from "@/lib/api";
 
 export type PendingKey = "assistant" | "resume";
 
-type Listener = (result: AgentAnswer | Error) => void;
+type Result = AgentAnswer | Error;
+type Listener = (result: Result) => void;
 
-interface Pending {
-  promise: Promise<AgentAnswer>;
-  listeners: Set<Listener>;
-  /** The message that started it, so a remounting page can show what is being worked on. */
+interface Entry {
   prompt: string;
+  /** Set once the request finishes and cleared when a page collects it. */
+  result?: Result;
+  listeners: Set<Listener>;
 }
 
-const pending = new Map<PendingKey, Pending>();
+const entries = new Map<PendingKey, Entry>();
 
-/** Start a request and register it. Returns the promise so the caller can await it too. */
+/** Start a request and register it. The caller still gets the promise to await. */
 export function startRequest(
   key: PendingKey,
   prompt: string,
   run: () => Promise<AgentAnswer>
 ): Promise<AgentAnswer> {
-  const promise = run();
-  const entry: Pending = { promise, listeners: new Set(), prompt };
-  pending.set(key, entry);
+  const entry: Entry = { prompt, listeners: new Set() };
+  entries.set(key, entry);
 
-  const settle = (result: AgentAnswer | Error) => {
-    // Delete BEFORE notifying: a listener that immediately starts another request must not
-    // have its new entry wiped by this cleanup.
-    if (pending.get(key) === entry) pending.delete(key);
-    entry.listeners.forEach((listener) => listener(result));
-    entry.listeners.clear();
+  const settle = (result: Result) => {
+    if (entries.get(key) !== entry) return;   // superseded by a newer request
+
+    if (entry.listeners.size > 0) {
+      // Someone is listening right now — hand it over and close the mailbox.
+      entry.listeners.forEach((listener) => listener(result));
+      entry.listeners.clear();
+      entries.delete(key);
+    } else {
+      // Nobody is mounted. HOLD the result rather than discarding it — this is the case
+      // that used to lose answers, and it is the most common one, because the whole point
+      // is that the user went somewhere else while it ran.
+      entry.result = result;
+    }
   };
 
-  promise
-    .then(settle)
-    .catch((e) => settle(e instanceof Error ? e : new Error(String(e))));
-
+  const promise = run();
+  promise.then(settle).catch((e) => settle(e instanceof Error ? e : new Error(String(e))));
   return promise;
 }
 
-/** Whether a request is running, and what was asked — for restoring the spinner. */
-export function getPending(key: PendingKey): { prompt: string } | null {
-  const entry = pending.get(key);
-  return entry ? { prompt: entry.prompt } : null;
+/** What state this key is in, for restoring the spinner on mount. */
+export function getPending(key: PendingKey): { prompt: string; done: boolean } | null {
+  const entry = entries.get(key);
+  return entry ? { prompt: entry.prompt, done: entry.result !== undefined } : null;
 }
 
 /**
- * Attach to a running request. Returns an unsubscribe function, or null if none is
- * running. Safe to call on every mount.
+ * Collect the answer for a key: delivered immediately if it already finished, otherwise
+ * when it does. Returns an unsubscribe function, or null if there is nothing to wait for.
+ *
+ * Safe to call on every mount — that is the point.
  */
 export function subscribe(key: PendingKey, listener: Listener): (() => void) | null {
-  const entry = pending.get(key);
+  const entry = entries.get(key);
   if (!entry) return null;
+
+  if (entry.result !== undefined) {
+    const result = entry.result;
+    entries.delete(key);
+    // Deliver asynchronously so the caller finishes mounting first — calling setState
+    // synchronously inside an effect body that is still running is a React warning.
+    queueMicrotask(() => listener(result));
+    return null;
+  }
+
   entry.listeners.add(listener);
   return () => entry.listeners.delete(listener);
 }

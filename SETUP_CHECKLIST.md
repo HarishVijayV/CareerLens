@@ -141,7 +141,7 @@ You don't need to touch any of this — it's installed, configured, and verified
 - Java 17 (installed to `~/.jre`) and `winutils.exe` (`~/hadoop`) so Spark runs on Windows
 - Docker services: Postgres, Redis, Kafka, gateway, auth, agent, jobs, notification
 - `infra/.env` created with a strong random JWT secret already generated
-- 201,356 job postings processed and loaded into the warehouse (5,397 of them live Adzuna listings)
+- 200,868 job postings processed and loaded into the warehouse (4,909 of them live Adzuna listings)
 - dbt star schema built, all 17 data-quality tests passing
 - 33 Python tests passing
 - LaTeX engine installed in the auth-service image, so resume PDF export works
@@ -150,10 +150,10 @@ You don't need to touch any of this — it's installed, configured, and verified
 
 | What | Result |
 |---|---|
-| Rows processed | 205,397 → 201,356 after dedup (4,041 duplicates removed) |
+| Rows processed | 204,909 → 200,868 after dedup (4,041 duplicates removed) |
 | Spark vs MapReduce | **Spark 57.1% faster (2.33×)** — median of 3 runs each |
 | MLlib salary model | trained on REAL postings only: GBT **R² = 0.617** vs baseline **0.475** |
-| Warehouse | 201,356 postings + 982,853 skill rows |
+| Warehouse | 200,868 postings + 982,853 skill rows |
 | dbt | 5 models, **17/17 tests pass** |
 | Airflow DAG | 7 tasks, parses with 0 import errors |
 | Tests | 33 passing |

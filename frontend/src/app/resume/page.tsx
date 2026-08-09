@@ -198,28 +198,29 @@ export default function ResumePage() {
     [load]
   );
 
-  // Re-attach to a rewrite that was already running when this page mounted — including
-  // one started before you wandered off to the Assistant and back.
+  /* One subscription driven by `thinking`; send() does not await. Awaiting as well would
+   * deliver twice, and awaiting instead loses the answer, because that await belongs to a
+   * component instance that no longer exists after a navigation. The cleanup unsubscribes
+   * on unmount, which is what tells the mailbox to HOLD the result rather than drop it. */
   useEffect(() => {
-    if (!getPending("resume")) return;
-    setThinking(true);
+    if (!thinking) return;
     const unsubscribe = subscribe("resume", (r) => void settleRewrite(r));
     return unsubscribe ?? undefined;
-  }, [settleRewrite]);
+  }, [thinking, settleRewrite]);
 
-  async function send(text: string) {
+  // Restore the spinner if a rewrite was already running when this page mounted.
+  useEffect(() => {
+    if (getPending("resume")) setThinking(true);
+  }, []);
+
+  function send(text: string) {
     if (!text.trim() || thinking) return;
     setChat((c) => [...c, { role: "user", text }]);
     setMessage("");
-    setThinking(true);
+    setThinking(true);   // triggers the subscription effect
     setError(null);
 
-    try {
-      const result = await startRequest("resume", text, () => api.ask(text, "resume_tailor"));
-      await settleRewrite(result);
-    } catch (err) {
-      await settleRewrite(err instanceof Error ? err : new Error(String(err)));
-    }
+    startRequest("resume", text, () => api.ask(text, "resume_tailor"));
   }
 
   async function deleteVersion(id: string, label: string) {

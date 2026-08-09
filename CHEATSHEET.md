@@ -15,7 +15,7 @@ was made. This is *what happens, in order*.
                         │  A. TWO SOURCES                          │
                         │  Adzuna API        synthetic generator   │
                         └───────┬──────────────────────┬───────────┘
-                                │  5,397 real          │  ~196k generated
+                                │  4,909 real          │  ~196k generated
                                 └──────────┬───────────┘
                                            ▼
                                 ┌────────────────────┐
@@ -90,7 +90,7 @@ was made. This is *what happens, in order*.
 | | |
 |---|---|
 | **In** | your profile's target roles + countries |
-| **Out** | `real_postings.jsonl` (5,397) · `synthetic_postings.jsonl` (~196k) |
+| **Out** | `real_postings.jsonl` (4,909) · `synthetic_postings.jsonl` (~196k) |
 | **Code** | `pipeline/ingestion/job_apis.py` · `generate_synthetic_data.py` |
 
 Adzuna is queried per search term, per country, 5 pages each. Terms come from **your
@@ -103,7 +103,7 @@ salary converted to **USD** (Adzuna returns each country's currency as a bare nu
 inferred** from the title, and salaries below $5,000/yr **nulled** — those are monthly
 Indian figures in an annual field, and a guessed salary is worse than a missing one.
 
-**Why synthetic too:** 5,397 real rows do not justify Spark. The generated rows exist so
+**Why synthetic too:** 4,909 real rows do not justify Spark. The generated rows exist so
 the distributed path runs at a size where its optimisations are measurable.
 
 ---
@@ -461,7 +461,7 @@ Verified: a full DAG run, all 7 tasks green, including a real 5-minute Adzuna fe
 
 | | |
 |---|---|
-| Postings | 201,356 (5,397 real, charts use these only) |
+| Postings | 200,868 (4,909 real, charts use these only) |
 | Skill rows | 737,525 |
 | Spark vs MapReduce | **57.1% faster (2.33×)** |
 | ML model | GBT **R² 0.617** vs baseline 0.475 — real data only |
@@ -505,6 +505,14 @@ At 200k rows a laptop and a few scripts would do. Three tools are demonstrations
 > generator computes salary — it had learned the generator, not the market. Retrained on
 > real postings it's 0.617 and region became the top feature. I'd rather quote the number
 > I can defend."
+
+**The hardest bug:**
+> "Ask the assistant something, navigate away, come back — no reply, no spinner, while the
+> request had finished on the server. Took three attempts: the promise lived in the
+> component, then in a per-page variable, then a shared registry that still deleted the
+> result if it finished while you were away. The fix is a mailbox that holds the answer
+> until a page collects it. An async result needs an owner that outlives whatever asked
+> for it."
 
 **On agents:**
 > "The model never executes anything. It requests a tool by name, my code checks it's

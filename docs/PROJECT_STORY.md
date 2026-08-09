@@ -13,11 +13,11 @@ the same aggregation — Spark came out 57% faster, and I can explain exactly wh
 
 | Claim | Actual measurement |
 |---|---|
-| Data processed | 205,397 rows → 201,356 after removing 4,041 duplicates |
-| Of which real | 5,397 live Adzuna postings (India + USA) |
+| Data processed | 204,909 rows → 200,868 after removing 4,041 duplicates |
+| Of which real | 4,909 live Adzuna postings (India + USA) |
 | Spark vs MapReduce | 57.1% faster, 2.33× speedup (median of 3 runs each) |
 | ML model | trained on real postings only: GBT R² = 0.617 vs baseline 0.475 |
-| Warehouse | 201,356 postings + 982,853 skill rows |
+| Warehouse | 200,868 postings + 982,853 skill rows |
 | Data quality | 17/17 dbt tests passing |
 
 Raw output is committed: `pipeline/data/benchmark_results.json` and `model_metrics.json`.

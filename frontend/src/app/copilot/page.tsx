@@ -159,17 +159,28 @@ export default function AssistantPage() {
     setLoading(false);
   }, []);
 
-  // Re-attach to a request that was already running when this page mounted. The registry
-  // is shared and keyed by page, so wandering Resume -> Assistant -> Resume cannot lose an
-  // answer or let one page claim another's.
+  /* ONE subscription, driven by `loading`, and submit() deliberately does not await.
+   *
+   * Awaiting in submit() as well as subscribing would deliver the same answer twice; and
+   * awaiting INSTEAD of subscribing loses it, because the await belongs to a component
+   * instance that no longer exists after a navigation. Going through the mailbox for every
+   * outcome means one code path, whether you stayed on this page or not.
+   *
+   * The cleanup unsubscribes on unmount, which is what tells the mailbox nobody is
+   * listening — so it holds the result instead of dropping it. */
   useEffect(() => {
-    if (!getPending("assistant")) return;
-    setLoading(true);
+    if (!loading) return;
     const unsubscribe = subscribe("assistant", settle);
     return unsubscribe ?? undefined;
-  }, [settle]);
+  }, [loading, settle]);
 
-  async function submit(text: string) {
+  // Restore the spinner if a request was already running (or has finished and is waiting
+  // to be collected) when this page mounts.
+  useEffect(() => {
+    if (getPending("assistant")) setLoading(true);
+  }, []);
+
+  function submit(text: string) {
     if (!text.trim() || loading) return;
 
     // APPEND, don't replace. The previous version wiped the screen on every question,
@@ -177,16 +188,11 @@ export default function AssistantPage() {
     // compare a follow-up answer against the one before it.
     setTurns((t) => [...t, { role: "user", text }]);
     setMessage("");
-    setLoading(true);
+    setLoading(true);   // this triggers the effect above, which subscribes
 
-    try {
-      const answer = await startRequest("assistant", text, () =>
-        api.ask(text, agent || undefined, teamMode ? "orchestrate" : "auto")
-      );
-      settle(answer);
-    } catch (e) {
-      settle(e instanceof Error ? e : new Error(String(e)));
-    }
+    startRequest("assistant", text, () =>
+      api.ask(text, agent || undefined, teamMode ? "orchestrate" : "auto")
+    );
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {

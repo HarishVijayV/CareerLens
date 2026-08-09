@@ -50,18 +50,18 @@ and that's precisely the point the MapReduce benchmark below proves.
 
 | Metric | Value |
 |---|---|
-| Raw rows in | 205,397 (5,397 live Adzuna postings + 200,000 generated) |
-| After dedup | 201,356 (4,041 duplicates removed) |
+| Raw rows in | 204,909 (4,909 live Adzuna postings + 200,000 generated) |
+| After dedup | 200,868 (4,041 duplicates removed) |
 | Spark vs MapReduce | **57.1% faster / 2.33× speedup** (median of 3 runs each) |
 | MLlib GBT (real postings only) | R² = 0.617, RMSE $36,671 |
 | LinearRegression baseline | R² = 0.475, RMSE $42,916 |
-| Warehouse rows | 201,356 postings + 982,853 skill rows |
+| Warehouse rows | 200,868 postings + 982,853 skill rows |
 | dbt | 5 models, 17/17 tests passing |
 
 Committed as JSON in `pipeline/data/`. Reproduce with `python run_pipeline.py --benchmark`.
 
 **Why the model trains on real postings only — and why the lower score is the better
-result.** Trained on all 201,356 rows it scored R²=0.898, which looked excellent and meant
+result.** Trained on all 200,868 rows it scored R²=0.898, which looked excellent and meant
 nothing: 96% of the feature importance was `seniority`, because that is precisely how the
 synthetic generator computes salary. The model had recovered the generator, not the job
 market.
@@ -93,7 +93,7 @@ empty profile still fetches something and market-wide analytics keep a broad sam
 ### Indexes are built by dbt, not by hand
 
 The analytics schema had **zero** indexes: dbt creates tables and never indexes them, so
-every search sequentially scanned 201,356 rows and the profile-ranking subquery scanned
+every search sequentially scanned 200,868 rows and the profile-ranking subquery scanned
 982,853 bridge rows per row it touched. Search took ~2.0s and exhausted Postgres' shared
 memory under load.
 
@@ -193,7 +193,7 @@ time, resume version used) — this is what powers the funnel analytics in the c
 
 ## Is this over-engineered? An honest audit, tool by tool
 
-At 201,356 rows a laptop and a few Python scripts would do the job. Several tools here are
+At 200,868 rows a laptop and a few Python scripts would do the job. Several tools here are
 therefore **demonstrations of a pattern, not solutions to a problem I actually had** — and
 saying so first is worth more than hoping nobody asks. An interviewer who works with these
 tools daily will spot an unjustified Kafka in about ten seconds.
