@@ -376,8 +376,8 @@ export function DivergingBar({
     return <p className="py-12 text-center text-xs text-[var(--text-muted)]">No data yet.</p>;
   }
 
-  const labelWidth = 108;
-  const plotWidth = 380;
+  const labelWidth = 92;
+  const plotWidth = 340;
   const half = plotWidth / 2;
   const zeroX = labelWidth + half;
   const gap = 8;
@@ -391,9 +391,9 @@ export function DivergingBar({
   return (
     <div className="relative overflow-x-auto">
       <svg
-        viewBox={`0 0 ${labelWidth + plotWidth + 80} ${data.length * (height + gap)}`}
+        viewBox={`0 0 ${labelWidth + plotWidth + 72} ${data.length * (height + gap)}`}
         className="w-full"
-        style={{ minWidth: 420 }}
+        style={{ minWidth: 380 }}
         role="img"
         aria-label="diverging bar chart: salary premium versus the overall average"
       >
@@ -419,7 +419,7 @@ export function DivergingBar({
             >
               {/* Invisible full-width hit target — hovering a short bar must not require
                   pixel precision. */}
-              <rect x={0} y={y - gap / 2} width={labelWidth + plotWidth + 80} height={height + gap} fill="transparent" />
+              <rect x={0} y={y - gap / 2} width={labelWidth + plotWidth + 72} height={height + gap} fill="transparent" />
 
               <text
                 x={labelWidth - 10}

@@ -98,7 +98,7 @@ export default function AnalyticsPage() {
 
         <ChartFrame
           title="Which skills pay above average"
-          subtitle="How far each skill's average sits from the overall average salary"
+          subtitle="Highest and lowest paying skills, measured against the overall average"
           note="The spread here is small — a few hundred dollars on a six-figure average. That is the honest reading: most postings in the warehouse are generated, and the generator assigns skills independently of salary, so there is no real skill premium to find. Real postings alone are too few to carry this chart yet."
           columns={["Skill", "Avg salary", "vs average"]}
           rows={premium.map((s) => [
@@ -111,11 +111,25 @@ export default function AnalyticsPage() {
               from the overall average — and a plain bar drew every value as a positive
               length, so the reader had to infer a sign the data states outright. Sorted
               highest-to-lowest so the two arms form one continuous shape. */}
+          {/* Take the top AND bottom of the range, not the top 12.
+              Sorting descending and slicing 12 returned twelve positives, so every bar sat
+              on the right of the zero line — the left half was empty (the gap) and there
+              was no red anywhere, which made a diverging chart look like an ordinary blue
+              bar chart. A diverging form has to show BOTH arms or it is the wrong form. */}
           <DivergingBar
-            data={[...premium]
-              .sort((a, b) => b.premium_vs_average - a.premium_vs_average)
-              .slice(0, 12)
-              .map((s) => ({ label: s.skill_name, value: s.premium_vs_average }))}
+            data={(() => {
+              const sorted = [...premium].sort(
+                (a, b) => b.premium_vs_average - a.premium_vs_average
+              );
+              const ends =
+                sorted.length <= 10
+                  ? sorted
+                  : [...sorted.slice(0, 6), ...sorted.slice(-4)];
+              return ends.map((s) => ({
+                label: s.skill_name,
+                value: s.premium_vs_average,
+              }));
+            })()}
             format={money}
           />
         </ChartFrame>
