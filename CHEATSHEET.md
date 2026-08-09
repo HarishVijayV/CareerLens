@@ -247,6 +247,40 @@ docker compose up -d --build --force-recreate --renew-anon-volumes
 
 ---
 
+## Over-engineered? Yes, on purpose — and say so first
+
+At 152k rows a laptop and a few scripts would do. Three tools are demonstrations of a
+pattern, not solutions to a problem this project actually had:
+
+| Tool | Needed here? | What would do instead | Becomes necessary when |
+|---|---|---|---|
+| **Spark** | no (85MB fits in RAM) | pandas | data outgrows one machine |
+| **Airflow** | no | `cron` + a shell script | you need task retries, backfills, and run history |
+| **Kafka** | no | a direct function call | several consumers react to one event independently |
+| **Snowflake** | no | Postgres | analytical scans outgrow one server |
+| **Kubernetes** | no | Docker Compose | rolling deploys, self-healing, scaling |
+
+**These four ARE load-bearing at any size** — keep them even in a tiny project:
+dbt's tests · the star schema · Parquet · Redis caching
+
+**Why Airflow beats cron once it matters:** cron reruns the whole 7-minute pipeline; Airflow
+retries the one step that failed. Cron runs on a clock; Airflow runs `dbt test` *because*
+`dbt run` succeeded. And cron can't answer "it failed twice last month, here are the logs".
+
+**Why Kafka beats a direct call once it matters:** if consumer B is broken, a direct call
+takes the producer down with it. A broker doesn't. That independence is the whole purchase
+— and it's worth nothing until there's more than one consumer.
+
+**Say this:**
+> "Spark, Kafka and Airflow aren't load-bearing at 152,000 rows — pandas and a cron job
+> would do it. I built them so the decisions were real: why cache, why a native expression
+> over a UDF, why fan-out needs a broker. What IS load-bearing at any size is dbt's tests,
+> the star schema and Redis caching."
+
+Better than claiming you needed a cluster. It shows you can size a solution to a problem.
+
+---
+
 ## Known gaps — say these before they're found
 
 - **No incremental loading** — full refresh every run

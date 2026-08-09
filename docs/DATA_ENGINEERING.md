@@ -188,3 +188,82 @@ time, resume version used) — this is what powers the funnel analytics in the c
 | Loader reports success but 0 rows | `pandas.read_parquet` on a Spark output *directory* returns empty | glob `part-*.parquet` explicitly |
 | `invalid input syntax for type bigint: "1.0"` | NULLs promote int columns to float in pandas | cast to nullable `Int64` |
 | `cannot drop table ... other objects depend on it` | dbt views depend on `raw.*`; only appears on the SECOND run | `DROP TABLE ... CASCADE` |
+
+---
+
+## Is this over-engineered? An honest audit, tool by tool
+
+At 151,883 rows a laptop and a few Python scripts would do the job. Several tools here are
+therefore **demonstrations of a pattern, not solutions to a problem I actually had** — and
+saying so first is worth more than hoping nobody asks. An interviewer who works with these
+tools daily will spot an unjustified Kafka in about ten seconds.
+
+The useful framing is not "is it needed?" but **"at what point does it become needed, and
+what would I use before that?"**
+
+| Tool | Needed at 152k rows? | What would do instead | When it genuinely becomes necessary |
+|---|---|---|---|
+| **PySpark** | No — pandas fits in RAM | pandas | When data exceeds one machine's memory, or a job must survive a node dying mid-run |
+| **Airflow** | No | `cron` + a shell script | When you have dependencies between tasks, retries, backfills, and need to answer "why did last Tuesday fail?" |
+| **Kafka** | No | a direct function call | When several independent consumers react to one event and must not break each other |
+| **dbt** | **Yes** | hand-written SQL, worse | Immediately — the tests are the point, and they scale down fine |
+| **Star schema** | **Yes** | one wide table | Immediately — it is a modelling choice, not a scale choice |
+| **Parquet** | **Yes** | CSV, slower and larger | Immediately — free win at any size |
+| **Redis** | **Yes** | none | Immediately — analytics queries are slow and repeat constantly |
+| **Snowflake** | No | Postgres | When analytical scans outgrow one server, or storage and compute need to scale apart |
+| **MapReduce** | No, deliberately | nothing | Never. It is here to *measure* what Spark improved, then be retired |
+| **Kubernetes** | No | Docker Compose | When you need rolling deploys, self-healing, or horizontal scaling |
+
+#### The three that are honestly demonstrations
+
+**Airflow vs a cron job.** For seven sequential steps run once a day, `cron` genuinely
+does the job in one line. What cron does not give you:
+
+* **Task-level retries.** Cron reruns the whole 7-minute pipeline; Airflow retries the one
+  step that hit a network blip and keeps everything already computed.
+* **Dependencies.** Cron runs on a clock. Airflow runs `dbt test` because `dbt run`
+  succeeded, and skips the rest when it didn't.
+* **History.** "It ran 47 times, failed twice, both in the Adzuna fetch, here are the
+  logs" is a question cron cannot answer at all.
+* **Backfills.** "Reprocess the last 30 days" is one command.
+* **Visibility.** Someone who isn't you can see whether last night worked.
+
+Those matter from roughly the point where a *second person* depends on the pipeline. At
+one user on one laptop, cron is the right answer and Airflow is the learning exercise.
+
+**Kafka vs a function call.** With one producer and one consumer, Kafka is strictly worse:
+a broker to operate, a message format to version, and delivery semantics to reason about,
+in exchange for nothing. Most "we use Kafka" portfolio projects are exactly this, and it
+shows.
+
+It earns its place only when **several independent consumers** react to the same event —
+here a warehouse loader and a match notifier, with an embedder as an obvious third. The
+test is: *if consumer B is broken, does the producer still work?* With direct calls, no.
+With a broker, yes. That independence is what you are buying, and it is worth nothing
+until you have more than one consumer.
+
+**Spark vs pandas.** 152k rows is about 85MB. pandas handles that comfortably, in one
+process, faster than Spark starts up. Spark is here so the code path is the one that still
+works at 152 *million* — and so the caching, partitioning and native-expression decisions
+are real decisions rather than things read about.
+
+#### What that means for the numbers
+
+The measured **57.1% Spark-over-MapReduce** result is real and reproducible, but it is
+measured at a size where neither engine was under pressure. It demonstrates the
+*direction* of the difference, not its magnitude at scale — where the gap widens
+considerably, because MapReduce's per-step disk writes hurt more the more steps you have.
+
+Quote it as "57% on my dataset", never as a general claim about the two engines.
+
+#### How to say all this in an interview
+
+> "Spark, Kafka and Airflow are not load-bearing at 152,000 rows — pandas and a cron job
+> would do it. I built them because I wanted the decisions to be real ones: why cache,
+> why a native expression instead of a UDF, why fan-out needs a broker. What IS
+> load-bearing at any size is dbt's tests, the star schema, and Redis caching, and I'd
+> keep all three in a project a tenth this size."
+
+That answer is stronger than claiming you needed a cluster. It shows you can size a
+solution to a problem, which is most of the actual job.
+
