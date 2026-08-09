@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import AppShell from "@/components/AppShell";
 import { AgentAnswer, api, ApiError } from "@/lib/api";
 
@@ -214,15 +216,81 @@ export default function AssistantPage() {
                       </div>
                     )}
 
-                    <p
-                      className={`whitespace-pre-wrap text-base leading-relaxed ${
-                        turn.error
-                          ? "text-red-700 dark:text-red-300"
-                          : "text-zinc-800 dark:text-zinc-200"
-                      }`}
-                    >
-                      {turn.text}
-                    </p>
+                    {turn.error ? (
+                      // Errors are our own plain strings, never markdown.
+                      <p className="whitespace-pre-wrap text-base leading-relaxed text-red-700 dark:text-red-300">
+                        {turn.text}
+                      </p>
+                    ) : (
+                      // The models answer in markdown — headings, bold, and tables. Rendered
+                      // as pre-wrapped text, that arrived as literal "**Machine Learning
+                      // Engineer**" and pipe-delimited table rows, which is unreadable
+                      // exactly where the answer is densest.
+                      //
+                      // remark-gfm is what makes tables and strikethrough work; plain
+                      // react-markdown only handles CommonMark, which has no table syntax —
+                      // and tables are most of what these answers use.
+                      <div className="prose-chat text-base leading-relaxed text-zinc-800 dark:text-zinc-200">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            // Links go to real job postings, so they must open away from
+                            // the chat rather than replacing it and losing the answer.
+                            a: ({ ...props }) => (
+                              <a
+                                {...props}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-700 underline dark:text-blue-400"
+                              />
+                            ),
+                            table: ({ ...props }) => (
+                              // Own scroll container: a wide table must never make the
+                              // whole page scroll sideways.
+                              <div className="my-3 overflow-x-auto">
+                                <table {...props} className="w-full border-collapse text-sm" />
+                              </div>
+                            ),
+                            th: ({ ...props }) => (
+                              <th
+                                {...props}
+                                className="border-b border-zinc-300 px-2 py-1.5 text-left font-medium dark:border-zinc-700"
+                              />
+                            ),
+                            td: ({ ...props }) => (
+                              <td
+                                {...props}
+                                className="border-b border-zinc-100 px-2 py-1.5 align-top dark:border-zinc-800"
+                              />
+                            ),
+                            h2: ({ ...props }) => (
+                              <h2 {...props} className="mt-4 mb-2 text-lg font-semibold" />
+                            ),
+                            h3: ({ ...props }) => (
+                              <h3 {...props} className="mt-3 mb-1.5 text-base font-semibold" />
+                            ),
+                            ul: ({ ...props }) => (
+                              <ul {...props} className="my-2 list-disc space-y-1 pl-5" />
+                            ),
+                            ol: ({ ...props }) => (
+                              <ol {...props} className="my-2 list-decimal space-y-1 pl-5" />
+                            ),
+                            p: ({ ...props }) => <p {...props} className="my-2" />,
+                            code: ({ ...props }) => (
+                              <code
+                                {...props}
+                                className="rounded bg-zinc-100 px-1 py-0.5 text-[13px] dark:bg-zinc-800"
+                              />
+                            ),
+                            hr: () => (
+                              <hr className="my-4 border-zinc-200 dark:border-zinc-800" />
+                            ),
+                          }}
+                        >
+                          {turn.text}
+                        </ReactMarkdown>
+                      </div>
+                    )}
 
                     {savedResumeLabel(turn.answer) && (
                       // Surface the saved version by NAME. It was only visible inside the

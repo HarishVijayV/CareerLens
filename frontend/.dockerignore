@@ -1,0 +1,26 @@
+# Keep the host's build output OUT of the image.
+#
+# Without this, the Dockerfile's `COPY . .` copies the host's node_modules straight over
+# the one `npm ci` just installed, which defeats the install entirely: the image ends up
+# with whatever happened to be on the developer's laptop instead of what package-lock.json
+# specifies. That is how adding react-markdown to package.json produced a container whose
+# package.json listed it and whose node_modules did not, failing with "module not found"
+# after a --no-cache rebuild.
+#
+# It also makes builds reproducible and much faster — node_modules is the largest thing in
+# the context by far, and it was being uploaded to the daemon on every single build.
+node_modules
+.next
+out
+build
+
+# Never bake secrets or local state into an image layer.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+npm-debug.log*
+.DS_Store
+*.local
