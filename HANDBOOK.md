@@ -10,32 +10,33 @@ Written so someone who clones this repo cold can understand the whole system —
 
 ## Table of contents
 
-**PART 1 — UNDERSTAND IT** — Start here. What this is and how the pieces fit, before any code.
+
+**PART 1 — UNDERSTAND IT**
 
 - [1. What this project is](#1-what-this-project-is)
-- [2. The 60-second mental model](#2-the-60-second-mental-model)
 
-**PART 2 — RUN IT** — Get it on screen next. Everything after this is easier once you have seen it work.
+**PART 2 — RUN IT**
 
-- [3. Running it locally](#3-running-it-locally)
-- [4. Every credential and what breaks without it](#4-every-credential-and-what-breaks-without-it)
+- [2. Running it locally](#2-running-it-locally)
+- [3. Every credential and what breaks without it](#3-every-credential-and-what-breaks-without-it)
 
-**PART 3 — HOW IT WORKS** — The narrative: where data comes from, what a click does, and how the agents think.
+**PART 3 — HOW IT WORKS**
 
-- [5. How data actually flows](#5-how-data-actually-flows)
-- [6. How a request actually flows](#6-how-a-request-actually-flows)
-- [7. The AI layer explained](#7-the-ai-layer-explained)
+- [4. How data actually flows](#4-how-data-actually-flows)
+- [5. How a request actually flows](#5-how-a-request-actually-flows)
+- [6. The AI layer explained](#6-the-ai-layer-explained)
 
-**PART 4 — DEEP DIVE ON EACH TECHNOLOGY** — Reference. Read straight through once, then come back to whichever tool you need.
+**PART 4 — DEEP DIVE ON EACH TECHNOLOGY**
 
-- [8. Every technology — what, why, how](#8-every-technology-what-why-how)
+- [7. Every technology — what, why, how](#7-every-technology-what-why-how)
+- [8. Every service and container — what each one is for](#8-every-service-and-container-what-each-one-is-for)
 
-**PART 5 — RUNNING IT FOR REAL** — What changes between your laptop and a server anyone can reach.
+**PART 5 — RUNNING IT FOR REAL**
 
 - [9. Security decisions](#9-security-decisions)
 - [10. HOSTING: everything that must change](#10-hosting-everything-that-must-change)
 
-**PART 6 — LEARN FROM IT** — The parts that are actually worth talking about in an interview.
+**PART 6 — LEARN FROM IT**
 
 - [11. Real bugs and what they taught](#11-real-bugs-and-what-they-taught)
 - [12. What's deliberately NOT here](#12-whats-deliberately-not-here)
@@ -51,15 +52,136 @@ Written so someone who clones this repo cold can understand the whole system —
 ---
 ## 1. What this project is
 
-A job-seeker's tool, built the way a company would build it.
+CareerLens is a job-hunting tool, built the way a company would build it rather than the
+way a tutorial would. You upload your resume, and it finds real jobs you can apply to,
+tells you how well you match them, rewrites your resume for a specific role, and tracks
+every application by reading your inbox. Underneath that is a full data pipeline that
+collects and processes job postings at scale, a machine-learning model that judges whether
+a posting pays fairly, and a group of AI agents that answer questions using only real data.
 
-You give it your resume and what you're looking for. It ingests job postings at scale,
-processes them through a distributed pipeline into a modelled warehouse, and puts AI
-agents on top that find matching roles, score your resume against them, rewrite it, and
-track every application by reading your inbox.
+**The real reason it exists** is to be a portfolio project where every layer is defensible
+in an interview — data engineering, backend, AI, and infrastructure — instead of a
+follow-along where you can't explain why anything is there.
 
-**The real reason it exists:** to be a portfolio project where every layer is defensible —
-data engineering, backend, AI, and infrastructure — rather than a tutorial follow-along.
+### What you can actually do with it
+
+**Set up your profile without typing it.** Upload a PDF, `.tex` or `.txt` resume and an AI
+agent reads it and fills in your name, skills, target roles, seniority and countries. You
+review and correct anything it got wrong, then save. Nothing is saved until you approve
+it, because that profile decides which jobs get fetched and how every match is scored — a
+wrong value there quietly poisons everything downstream.
+
+**Browse jobs that are ranked for you.** The job board holds 151,883 postings, of which
+4,911 are live listings from real job boards. Real ones always sort first and carry a
+green "live" badge and a working apply link; generated ones are labelled "sample". On top
+of that, your profile reorders the list: your regions first, then roles wanting the most
+of your skills, then salary. Change your profile from India to the USA and the priority
+follows. You can also filter by skill, region, seniority, salary, and whether a role pays
+above or below market.
+
+**Apply in one click, and have it tracked.** The Apply button opens the real listing and
+records the application at the same time, because applying somewhere and then remembering
+to log it is exactly the step people skip.
+
+**See what the market actually looks like.** An analytics page shows which skills are most
+in demand, how salary varies by seniority and region, hiring seasonality across the year,
+and what premium each skill carries. Every chart is plain SQL over the warehouse — no AI
+involved, and the page says so.
+
+**Know whether a job pays fairly.** A machine-learning model trained on the real postings
+predicts what each role should pay, and every posting carries the gap between that
+prediction and its advertised salary — shown as "+$20,201" or "below market", and
+searchable as a filter.
+
+**Ask questions in plain English.** An assistant page routes your question to the right
+specialist agent, or to several at once when the question needs more than one. Every tool
+the agents called is shown with the answer, so nothing is unauditable.
+
+**Tailor your resume to a specific job.** An agent rewrites your resume against a posting,
+in LaTeX, and can compile it to PDF. Every version is kept, so an AI rewrite can never
+destroy your original and you can compare versions.
+
+**Track applications from your inbox.** Connect Gmail once, and a background worker reads
+the last 30 days of mail, finds messages from recruiting systems, and classifies each as
+applied, rejected, interview or offer. A funnel chart shows how far you got at each stage.
+
+### How the whole thing is wired, end to end
+
+Read this once and the rest of the handbook has somewhere to attach to. There are three
+separate systems, and they only meet at the database.
+
+**1. The pipeline — batch, runs on a schedule, no web requests involved.**
+
+```
+  Adzuna API (India + USA)  ─┐
+  Remotive API              ─┼──> data/raw/*.jsonl        [landing zone, never edited]
+  synthetic generator       ─┘            │
+                                          ▼
+                          PySpark ETL   (clean, dedupe, extract skills)
+                                          │
+                                          ▼
+                          data/curated/*.parquet
+                                          │
+                        ┌─────────────────┴─────────────────┐
+                        ▼                                   ▼
+              Spark MLlib (train + score)          load_to_warehouse.py (COPY)
+                        │                                   │
+                        └─────────────> Postgres  raw.*  <──┘
+                                          │
+                                          ▼
+                             dbt run   (build star schema)
+                             dbt test  (17 checks — FAILS the run on bad data)
+                                          │
+                                          ▼
+                             Postgres  analytics.*     ← the app only ever reads this
+```
+
+**2. The app — request/response, reads what the pipeline built.**
+
+```
+  Browser (Next.js)
+        │  cookies: access + refresh token
+        ▼
+  API Gateway :8000        verifies the JWT once, strips forged identity headers
+        │
+        ├──> auth-service    users, profile, resumes, applications
+        ├──> jobs-service    search + analytics  (Redis cache in front)
+        ├──> agent-service   the AI agents
+        └──> worker-service  Celery: Gmail sync, background jobs
+```
+
+**3. The AI layer — agents calling tools, on top of the app.**
+
+```
+  your question
+        │
+        ▼
+  planner  ── picks ONE specialist, or escalates to the whole team
+        │
+        ▼
+  agent loop:  model asks for a tool  ->  OUR Python validates and runs it
+               ->  result goes back    ->  repeat until it answers
+        │
+        ▼
+  tools call jobs-service / auth-service — never the raw files
+```
+
+**The one separation that matters:** the AI layer never touches raw data. It only reads
+curated tables that already passed dbt's tests. That is the concrete answer to "how do you
+stop an LLM making numbers up" — you don't let it near unvalidated data in the first place.
+
+**Where each part lives in the repo:**
+
+| Part | Directory |
+|---|---|
+| Ingestion (real + synthetic) | `pipeline/ingestion/` |
+| Spark ETL and the ML model | `pipeline/spark_jobs/` |
+| MapReduce comparison | `pipeline/mapreduce_demo/` |
+| Star schema and tests | `pipeline/dbt/` |
+| Scheduled DAG | `pipeline/airflow/dags/` |
+| Backend services | `services/` (one folder each) |
+| Website | `frontend/` |
+| Docker, Kubernetes, CI | `infra/`, `k8s/`, `.github/` |
 
 ### Measured results (not claims)
 
@@ -115,46 +237,12 @@ The benchmark numbers come from a separate 200,000-row run recorded in
 
 ---
 
-## 2. The 60-second mental model
-
-Three independent systems that meet at a database:
-
-```
-   ┌──────────────────────────────────────────────────────────┐
-   │ 1. THE PIPELINE  (batch, runs on a schedule)              │
-   │    job APIs + generator → Spark → ML → dbt → warehouse     │
-   └───────────────────────────┬──────────────────────────────┘
-                               │ writes curated data
-                               ▼
-                    ┌──────────────────────┐
-                    │  PostgreSQL + Redis   │
-                    └──────────┬───────────┘
-                               │ reads
-   ┌───────────────────────────┴──────────────────────────────┐
-   │ 2. THE APP  (request/response)                            │
-   │    Next.js → Gateway → auth / jobs / agent / worker        │
-   └───────────────────────────┬──────────────────────────────┘
-                               │
-   ┌───────────────────────────┴──────────────────────────────┐
-   │ 3. THE AI LAYER  (agents calling tools)                   │
-   │    planner → specialist agent → tools → warehouse data     │
-   └──────────────────────────────────────────────────────────┘
-```
-
-**The key separation:** the AI layer never touches raw data. It only reads curated data
-that has already passed dbt's quality tests. That's a deliberate answer to "how do you
-stop an LLM hallucinating numbers" — you don't let it near unvalidated data.
-
----
-
----
-
 # PART 2 — RUN IT
 
 *Get it on screen next. Everything after this is easier once you have seen it work.*
 
 ---
-## 3. Running it locally
+## 2. Running it locally
 
 ### Prerequisites
 Docker Desktop, Python 3.11+, Node 18+, Java 17 (Spark), and on Windows `winutils.exe`.
@@ -196,7 +284,7 @@ python check_setup.py     # services, auth, warehouse, credentials, agents, resu
 
 ---
 
-## 4. Every credential and what breaks without it
+## 3. Every credential and what breaks without it
 
 | Credential | Cost | Required? | Without it |
 |---|---|---|---|
@@ -219,7 +307,7 @@ Full walkthrough: [docs/CREDENTIALS.md](docs/CREDENTIALS.md)
 *The narrative: where data comes from, what a click does, and how the agents think.*
 
 ---
-## 5. How data actually flows
+## 4. How data actually flows
 
 ```
 job APIs (Adzuna IN+US, Remotive)  +  synthetic generator
@@ -347,7 +435,7 @@ here is streaming — Kafka carries `posting.discovered` events for fan-out, not
 
 ---
 
-## 6. How a request actually flows
+## 5. How a request actually flows
 
 **"Tailor my resume for job X"**
 
@@ -369,7 +457,7 @@ would invalidate each other and log you out precisely *because* the security wor
 
 ---
 
-## 7. The AI layer explained
+## 6. The AI layer explained
 
 **An agent is a loop.** That's it:
 
@@ -466,7 +554,7 @@ even resolve from it.
 *Reference. Read straight through once, then come back to whichever tool you need.*
 
 ---
-## 8. Every technology — what, why, how
+## 7. Every technology — what, why, how
 
 The table is the summary. Below it, each data tool gets a proper explanation: what it is
 in plain English, what it *can* do, what we actually made it do, and the real code.
@@ -788,6 +876,184 @@ charting library** — every visual decision is explainable, and there's no blac
 | **Kubernetes** | Self-healing, rolling deploys, horizontal scaling |
 
 ---
+
+---
+
+## 8. Every service and container — what each one is for
+
+### Why microservices at all
+
+Being honest first: at this size, one FastAPI app would work. The split earns its place
+for three specific reasons, and those are the ones to give in an interview rather than
+"microservices are good".
+
+**Different scaling needs.** The agent service is slow and expensive — one question is
+3–6 LLM calls. Job search is fast and hot. As one app you would have to scale the whole
+thing to handle more searches, dragging idle agent capacity along with it.
+
+**Different blast radius.** The LLM provider going down should not stop people browsing
+jobs. Separate processes mean a failure stays where it happened.
+
+**A real security boundary.** The MCP server sits on its own Docker network and physically
+cannot reach `auth-service`. Inside one app that would be a comment in the code hoping
+nobody imports the wrong module; across containers it is enforced by the network itself.
+
+### The nine containers
+
+| Container | Port | What it does | What breaks without it |
+|---|---|---|---|
+| **frontend** | 3000 | The Next.js website | No UI; the APIs still work |
+| **gateway** | 8000 | The only public entrypoint. Verifies the JWT once, strips forged identity headers, forwards to the right service | Nothing is reachable |
+| **auth-service** | 8001 | Signup, login, tokens, profile, resumes, applications, Google OAuth | No login, no resumes |
+| **agent-service** | 8002 | The AI agents, the planner, the orchestrator, the tool loop | Assistant and resume tailoring |
+| **jobs-service** | 8003 | Job search and analytics queries, with Redis caching | Job board and charts |
+| **worker-service** | — | Celery worker. Gmail sync and other slow jobs. No HTTP port — it pulls work from a queue | Inbox tracking |
+| **mcp-server** | 8004 | Exposes job data to external AI clients over MCP. Isolated network | External AI access only |
+| **postgres** | 5432 | App data + the `analytics.*` warehouse | Everything |
+| **redis** | 6379 | Cache, rate limiting, Celery broker | Slower; background jobs stop |
+
+Kafka, Airflow and their databases exist too but sit behind the `bigdata` compose profile,
+so they are off unless you ask for them.
+
+### What each service actually owns
+
+**gateway** is the security boundary. Every request from a browser lands here first. It
+checks the JWT once so no other service has to, and it **deletes** any `X-User-Id` header
+the client sent before adding its own — without that, anyone could read anyone's profile
+by typing a header. It's a proxy, so it holds no data.
+
+**auth-service** owns everything about *you*: your account, hashed password, hashed refresh
+tokens, profile, resume versions (including the original PDF bytes), applications, and your
+encrypted Google token. It is the only service that touches those tables.
+
+**jobs-service** is read-only. It queries `analytics.*` and never writes. That is why it
+can cache aggressively — nothing it serves changes except when the pipeline runs.
+
+**agent-service** holds the agent loop, the six agent definitions, the planner and the
+orchestrator, plus the LangGraph version of the same flow for comparison. It calls the
+other services through their APIs, exactly like the browser would.
+
+**worker-service** has no HTTP interface at all. It waits on a Redis queue and does slow
+work — reading 30 days of Gmail and classifying each message is N API calls plus N LLM
+calls, far too slow to hold a web request open for.
+
+**mcp-server** is the odd one out: it exists for *other* AI clients, not for our website.
+Its network isolation is the point — verified by confirming it gets a connection error
+when it tries to reach `auth-service`.
+
+---
+
+### Docker and Docker Compose
+
+**Docker** packages each service with its own Python version and dependencies, so
+"works on my machine" stops being a category of bug. Each service has its own
+`Dockerfile`.
+
+**Docker Compose** describes all nine containers, their networks, volumes and start order
+in one file, and starts them with one command:
+
+```bash
+cd infra && docker compose up -d
+```
+
+Three things in `docker-compose.yml` worth understanding:
+
+*`depends_on` with `condition: service_healthy`* — services wait for Postgres to actually
+accept connections, not merely to have started. Without it, `auth-service` boots first,
+fails to connect, and dies.
+
+*`restart: unless-stopped`* — a crashed container comes back by itself, and everything
+returns automatically after a reboot.
+
+*Named volumes* — `postgres_data` lives outside the container, so `docker compose down`
+does not delete your 151,883 postings.
+
+*`profiles: [bigdata]`* — Kafka and Airflow are declared but only start when asked, which
+is why a normal `up` doesn't cost you 1.5GB of RAM.
+
+---
+
+### Kubernetes — and what it adds over Compose
+
+Compose already runs everything. Kubernetes is here because it does four things Compose
+cannot, and those four are the answer to "why bother?".
+
+**Self-healing.** Compose restarts a crashed container. Kubernetes restarts a container
+that is *running but broken* — because it keeps asking each pod whether it is actually
+healthy, and replaces it when the answer is no.
+
+**Rolling deploys.** New version starts, passes its readiness check, receives traffic, and
+only then does the old one stop. Compose replaces containers with a gap in service.
+
+**Horizontal scaling.** `replicas: 3` runs three copies with load spread across them, and
+the HorizontalPodAutoscaler adds more when CPU rises.
+
+**Declarative state.** You describe what should exist; Kubernetes continuously makes
+reality match. Delete a pod by hand and it comes back — verified here by killing one
+mid-request and watching the request still succeed.
+
+**The objects used here, in plain terms:**
+
+| Object | What it is |
+|---|---|
+| **Pod** | One running container (or a few that must live together) |
+| **Deployment** | "Keep N identical pods alive" — handles restarts and rollouts |
+| **Service** | A stable internal address in front of pods that come and go |
+| **Ingress** | Routes outside traffic to the right Service by URL path |
+| **ConfigMap** | Non-secret settings, injected as environment variables |
+| **Secret** | The same, for passwords and API keys |
+| **StatefulSet** | Like a Deployment, but for things with disks — Postgres and Redis |
+| **PersistentVolumeClaim** | The disk itself, which survives the pod being replaced |
+| **HPA** | Adds and removes pods automatically based on CPU |
+
+**Why Postgres is a StatefulSet and not a Deployment.** Deployment pods are
+interchangeable and get random names; if one is replaced, a new empty one appears.
+StatefulSet pods keep a stable identity and stay attached to the same disk, which is
+exactly what a database needs.
+
+**Three probes, three different questions** — this is the part most people get wrong:
+
+| Probe | Question | What Kubernetes does if it fails |
+|---|---|---|
+| **startup** | "Has it finished booting?" | Waits longer before judging it |
+| **readiness** | "Can it serve traffic right now?" | Stops sending it requests |
+| **liveness** | "Is it wedged?" | Kills and restarts it |
+
+Getting these confused causes real outages: a liveness probe that is too aggressive
+restarts a healthy-but-slow service in a loop.
+
+Local cluster is **kind** (Kubernetes in Docker), so the whole thing runs on a laptop with
+no cloud account.
+
+---
+
+### Helm — why not just apply the YAML
+
+Raw Kubernetes YAML means six nearly-identical files, one per service, differing by a name
+and a port. Change a label and you edit six files and miss one.
+
+**Helm** is templating plus release management. The chart in `k8s/helm/careerlens/` defines
+each service once and loops over a list in `values.yaml`:
+
+```yaml
+services:
+  - name: gateway
+    port: 8000
+    replicas: 2
+  - name: jobs-service
+    port: 8000
+```
+
+That renders 21 Kubernetes objects from one template. It also gives you `helm upgrade` and
+`helm rollback`, so a bad deploy is one command to undo, and `helm install` with different
+values deploys a staging copy without duplicating any YAML.
+
+Check what it will produce before applying anything:
+
+```bash
+helm template careerlens k8s/helm/careerlens     # render, don't install
+helm install careerlens k8s/helm/careerlens
+```
 
 ---
 
