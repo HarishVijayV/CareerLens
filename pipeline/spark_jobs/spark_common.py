@@ -61,7 +61,20 @@ for _var in ("JAVA_HOME", "HADOOP_HOME"):
 from pyspark.sql import SparkSession  # noqa: E402  (must follow the env setup above)
 
 
-def build_spark(app_name: str, driver_memory: str = "4g") -> SparkSession:
+def build_spark(app_name: str, driver_memory: str | None = None) -> SparkSession:
+    """Build the session. Driver memory comes from the environment, not a hardcoded value.
+
+    It was fixed at 4g, which is fine on a laptop running the pipeline alone and wrong
+    inside Airflow: with eighteen containers up there was only ~2.9GB free, the JVM could
+    not reserve its heap, and training died mid-`fit` with a Py4JError — a message that
+    looks like a Spark bug and is actually the machine saying no.
+
+    Worth knowing because the failure was NOT deterministic: the same task passed earlier
+    in the day when fewer containers were running. An out-of-memory failure that depends on
+    what else is running is the kind that looks flaky and gets retried rather than
+    diagnosed.
+    """
+    driver_memory = driver_memory or os.getenv("SPARK_DRIVER_MEMORY", "4g")
     return (
         SparkSession.builder.appName(app_name)
         # local[*] uses every core on this machine. Pointing at a real cluster (YARN,

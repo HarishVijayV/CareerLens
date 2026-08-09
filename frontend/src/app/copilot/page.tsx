@@ -5,25 +5,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import AppShell from "@/components/AppShell";
 import { AgentAnswer, api, ApiError } from "@/lib/api";
+import { getPending, startRequest, subscribe } from "@/lib/pendingRequests";
 
 const CHAT_STORAGE_KEY = "careerlens.assistant.turns";
-
-/**
- * The in-flight request, held OUTSIDE the component.
- *
- * Persisting the conversation was only half the problem. Ask a question, navigate to
- * Dashboard while it is thinking, come back: the turns were restored but the answer never
- * arrived, because Next.js unmounted the page and with it the only thing awaiting the
- * promise. The request completed perfectly on the server and the reply was dropped on the
- * floor — leaving a question with no answer and no spinner, which reads as a silent
- * failure of a request that actually succeeded.
- *
- * Module scope survives client-side navigation (the JS module is not re-evaluated), so
- * parking the promise here lets a remounted component re-attach to the SAME request rather
- * than starting a new one or losing it. A full page reload does clear it, which is correct
- * — that genuinely is a new page.
- */
-let inFlight: Promise<AgentAnswer> | null = null;
 
 const EXAMPLES = [
   "Which skills pay the most above average?",
@@ -160,7 +144,7 @@ export default function AssistantPage() {
   }, [turns, loading]);
 
   /** Append whatever a request produced — used by submit() and by the reconnect effect,
-   *  so both paths land in exactly the same state. */
+   *  so an answer lands in identical state whether you stayed on the page or not. */
   const settle = useCallback((result: AgentAnswer | Error) => {
     setTurns((t) => [
       ...t,
@@ -173,21 +157,16 @@ export default function AssistantPage() {
         : { role: "assistant" as const, text: result.answer, answer: result },
     ]);
     setLoading(false);
-    inFlight = null;
   }, []);
 
-  // Re-attach to a request that was already running when this page mounted. Without this,
-  // navigating away mid-question loses the answer entirely.
+  // Re-attach to a request that was already running when this page mounted. The registry
+  // is shared and keyed by page, so wandering Resume -> Assistant -> Resume cannot lose an
+  // answer or let one page claim another's.
   useEffect(() => {
-    if (!inFlight) return;
+    if (!getPending("assistant")) return;
     setLoading(true);
-    let cancelled = false;
-    inFlight
-      .then((answer) => !cancelled && settle(answer))
-      .catch((e) => !cancelled && settle(e instanceof Error ? e : new Error(String(e))));
-    return () => {
-      cancelled = true;
-    };
+    const unsubscribe = subscribe("assistant", settle);
+    return unsubscribe ?? undefined;
   }, [settle]);
 
   async function submit(text: string) {
@@ -200,17 +179,13 @@ export default function AssistantPage() {
     setMessage("");
     setLoading(true);
 
-    // Stored on the module, not in a local variable, so it outlives an unmount.
-    inFlight = api.ask(text, agent || undefined, teamMode ? "orchestrate" : "auto");
-    const thisRequest = inFlight;
-
     try {
-      const answer = await thisRequest;
-      // Only settle if this is still the current request — a second question started while
-      // the first was running must not have the first's answer appended twice.
-      if (inFlight === thisRequest) settle(answer);
+      const answer = await startRequest("assistant", text, () =>
+        api.ask(text, agent || undefined, teamMode ? "orchestrate" : "auto")
+      );
+      settle(answer);
     } catch (e) {
-      if (inFlight === thisRequest) settle(e instanceof Error ? e : new Error(String(e)));
+      settle(e instanceof Error ? e : new Error(String(e)));
     }
   }
 

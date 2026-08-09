@@ -5,6 +5,7 @@ import AppShell from "@/components/AppShell";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ActiveResume, AgentAnswer, api, ApiError, ResumeVersion, ToolCall } from "@/lib/api";
+import { getPending, startRequest, subscribe } from "@/lib/pendingRequests";
 
 interface ChatTurn {
   role: "user" | "assistant";
@@ -14,18 +15,7 @@ interface ChatTurn {
 
 const RESUME_CHAT_KEY = "careerlens.resume.chat";
 
-/**
- * The in-flight rewrite, held OUTSIDE the component — same reason as the Assistant page.
- *
- * A resume rewrite takes 30-90 seconds, which is exactly long enough that switching tabs
- * is the natural thing to do. Routing away unmounted this page and with it the only thing
- * awaiting the promise, so the request finished on the server, saved a new version, and
- * the reply was dropped — leaving a question with no answer and no spinner.
- *
- * Module scope survives client-side navigation, so a remounted page re-attaches to the
- * SAME request instead of losing it.
- */
-let inFlightRewrite: Promise<AgentAnswer> | null = null;
+
 
 const QUICK_ASKS = [
   "Convert my resume to LaTeX",
@@ -199,33 +189,22 @@ export default function ResumePage() {
           ...c,
           { role: "assistant", text: result.answer, toolCalls: result.tool_calls },
         ]);
-        // The agent saved a new version; reload so the preview and the version list show
-        // what was actually persisted rather than what was on screen before.
+        // The agent saved a new version; reload so the preview and version list show what
+        // was actually persisted.
         await load().catch(() => {});
       }
       setThinking(false);
-      inFlightRewrite = null;
     },
     [load]
   );
 
-  // Re-attach to a rewrite that was already running when this page mounted.
+  // Re-attach to a rewrite that was already running when this page mounted — including
+  // one started before you wandered off to the Assistant and back.
   useEffect(() => {
-    if (!inFlightRewrite) return;
+    if (!getPending("resume")) return;
     setThinking(true);
-    let cancelled = false;
-    // Braces, not `&&`: the arrow must return void, and `cancelled && promise` types as
-    // `false | Promise<void>`, which .then() will not accept.
-    inFlightRewrite
-      .then((r) => {
-        if (!cancelled) void settleRewrite(r);
-      })
-      .catch((e) => {
-        if (!cancelled) void settleRewrite(e instanceof Error ? e : new Error(String(e)));
-      });
-    return () => {
-      cancelled = true;
-    };
+    const unsubscribe = subscribe("resume", (r) => void settleRewrite(r));
+    return unsubscribe ?? undefined;
   }, [settleRewrite]);
 
   async function send(text: string) {
@@ -235,16 +214,11 @@ export default function ResumePage() {
     setThinking(true);
     setError(null);
 
-    inFlightRewrite = api.ask(text, "resume_tailor");
-    const thisRequest = inFlightRewrite;
-
     try {
-      const result = await thisRequest;
-      if (inFlightRewrite === thisRequest) await settleRewrite(result);
+      const result = await startRequest("resume", text, () => api.ask(text, "resume_tailor"));
+      await settleRewrite(result);
     } catch (err) {
-      if (inFlightRewrite === thisRequest) {
-        await settleRewrite(err instanceof Error ? err : new Error(String(err)));
-      }
+      await settleRewrite(err instanceof Error ? err : new Error(String(err)));
     }
   }
 

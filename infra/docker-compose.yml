@@ -357,6 +357,10 @@ services:
       # Inside the compose network Postgres is `postgres`, not localhost. dbt's profile
       # reads this, so the same profiles.yml works from a laptop and from a container.
       DBT_POSTGRES_HOST: postgres
+      # Spark inside Airflow shares the machine with every other container, so it cannot
+      # have the 4g a standalone run gets. Asking for more than is free makes the JVM die
+      # mid-fit with a Py4JError that reads like a Spark bug.
+      SPARK_DRIVER_MEMORY: 2g
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # The pipeline scripts take a full URL rather than parts.
@@ -387,6 +391,10 @@ services:
       # Inside the compose network Postgres is `postgres`, not localhost. dbt's profile
       # reads this, so the same profiles.yml works from a laptop and from a container.
       DBT_POSTGRES_HOST: postgres
+      # Spark inside Airflow shares the machine with every other container, so it cannot
+      # have the 4g a standalone run gets. Asking for more than is free makes the JVM die
+      # mid-fit with a Py4JError that reads like a Spark bug.
+      SPARK_DRIVER_MEMORY: 2g
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # The pipeline scripts take a full URL rather than parts.
