@@ -16,6 +16,14 @@ services:
   postgres:
     restart: unless-stopped
     image: postgres:16-alpine
+    # Docker gives every container 64MB of /dev/shm, and Postgres uses shared memory for
+    # parallel query workers. A ranked search over the 151k-row fact table exceeded it and
+    # failed with "could not resize shared memory segment ... No space left on device" —
+    # a message that points at the disk, which had 894GB free. It is not the disk.
+    #
+    # 64MB is fine for a toy dataset and quietly wrong for a real one, so this will bite
+    # again on any host that doesn't set it, including the cloud VM.
+    shm_size: 256mb
     env_file: .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}

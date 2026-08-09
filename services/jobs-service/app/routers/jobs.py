@@ -194,7 +194,7 @@ def search_jobs(
         if regions:
             params["prioritize_regions"] = regions
             region_rank = "CASE WHEN f.region = ANY(:prioritize_regions) THEN 1 ELSE 0 END"
-            order_terms.append(f"{region_rank} DESC")
+            order_terms.append("region_match DESC")
 
     skill_rank = "NULL::int"
     if prioritize_skills:
@@ -206,7 +206,12 @@ def search_jobs(
                 JOIN analytics.dim_skill ps ON ps.skill_id = pb.skill_id
                 WHERE pb.posting_id = f.posting_id AND ps.skill_name = ANY(:prioritize_skills)
             )"""
-            order_terms.append(f"{skill_rank} DESC")
+            # ORDER BY the output alias, not a second copy of the subquery. Repeating it
+            # made Postgres evaluate a correlated count TWICE for every candidate row over
+            # a 151k-row table, which is what exhausted shared memory. Postgres resolves
+            # bare names in ORDER BY against the select list first, so this reuses the
+            # already-computed value.
+            order_terms.append("skill_matches DESC")
 
     order_terms.append("f.salary DESC NULLS LAST")
     order_by = ", ".join(order_terms)

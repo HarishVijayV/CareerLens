@@ -14,3 +14,19 @@ models:
       +materialized: view
     marts:
       +materialized: table
+
+      # Indexes, as post-hooks rather than one-off DDL.
+      #
+      # dbt DROPS and recreates a table materialisation on every run, taking any index
+      # with it — so an index created by hand survives exactly until the next `dbt run`
+      # and then silently disappears. Attaching them here makes them part of the build.
+      #
+      # They were missing entirely, and the analytics schema had ZERO indexes. Every
+      # search did a sequential scan of 151,883 rows, and the profile-ranking subquery
+      # ran one such scan per candidate row. That is what made search take ~2s and
+      # exhausted Postgres' shared memory under load.
+      #
+      # `if not exists` keeps re-runs idempotent, which matters because dbt runs these
+      # after every build.
+      +post-hook:
+        - "{{ index_marts_tables() }}"
