@@ -1,12 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import AppShell from "@/components/AppShell";
 import { AgentAnswer, api, ApiError } from "@/lib/api";
 
 const CHAT_STORAGE_KEY = "careerlens.assistant.turns";
+
+/**
+ * The in-flight request, held OUTSIDE the component.
+ *
+ * Persisting the conversation was only half the problem. Ask a question, navigate to
+ * Dashboard while it is thinking, come back: the turns were restored but the answer never
+ * arrived, because Next.js unmounted the page and with it the only thing awaiting the
+ * promise. The request completed perfectly on the server and the reply was dropped on the
+ * floor — leaving a question with no answer and no spinner, which reads as a silent
+ * failure of a request that actually succeeded.
+ *
+ * Module scope survives client-side navigation (the JS module is not re-evaluated), so
+ * parking the promise here lets a remounted component re-attach to the SAME request rather
+ * than starting a new one or losing it. A full page reload does clear it, which is correct
+ * — that genuinely is a new page.
+ */
+let inFlight: Promise<AgentAnswer> | null = null;
 
 const EXAMPLES = [
   "Which skills pay the most above average?",
@@ -142,6 +159,37 @@ export default function AssistantPage() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, loading]);
 
+  /** Append whatever a request produced — used by submit() and by the reconnect effect,
+   *  so both paths land in exactly the same state. */
+  const settle = useCallback((result: AgentAnswer | Error) => {
+    setTurns((t) => [
+      ...t,
+      result instanceof Error
+        ? {
+            role: "assistant" as const,
+            text: result instanceof ApiError ? result.message : "The assistant call failed.",
+            error: true,
+          }
+        : { role: "assistant" as const, text: result.answer, answer: result },
+    ]);
+    setLoading(false);
+    inFlight = null;
+  }, []);
+
+  // Re-attach to a request that was already running when this page mounted. Without this,
+  // navigating away mid-question loses the answer entirely.
+  useEffect(() => {
+    if (!inFlight) return;
+    setLoading(true);
+    let cancelled = false;
+    inFlight
+      .then((answer) => !cancelled && settle(answer))
+      .catch((e) => !cancelled && settle(e instanceof Error ? e : new Error(String(e))));
+    return () => {
+      cancelled = true;
+    };
+  }, [settle]);
+
   async function submit(text: string) {
     if (!text.trim() || loading) return;
 
@@ -152,22 +200,17 @@ export default function AssistantPage() {
     setMessage("");
     setLoading(true);
 
+    // Stored on the module, not in a local variable, so it outlives an unmount.
+    inFlight = api.ask(text, agent || undefined, teamMode ? "orchestrate" : "auto");
+    const thisRequest = inFlight;
+
     try {
-      const answer = await api.ask(text, agent || undefined, teamMode ? "orchestrate" : "auto");
-      setTurns((t) => [...t, { role: "assistant", text: answer.answer, answer }]);
+      const answer = await thisRequest;
+      // Only settle if this is still the current request — a second question started while
+      // the first was running must not have the first's answer appended twice.
+      if (inFlight === thisRequest) settle(answer);
     } catch (e) {
-      // Errors render as a turn in the conversation rather than a banner, so the history
-      // stays intact and you can see which question failed.
-      setTurns((t) => [
-        ...t,
-        {
-          role: "assistant",
-          text: e instanceof ApiError ? e.message : "The assistant call failed.",
-          error: true,
-        },
-      ]);
-    } finally {
-      setLoading(false);
+      if (inFlight === thisRequest) settle(e instanceof Error ? e : new Error(String(e)));
     }
   }
 
