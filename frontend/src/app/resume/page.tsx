@@ -184,7 +184,7 @@ export default function ResumePage() {
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Resume</h1>
-          <p className="mt-1 text-base text-zinc-500">
+          <p className="mt-1 text-base text-[var(--text-muted)]">
             Upload it, edit it, or ask the assistant to rewrite it. Every save is a new
             version — nothing is overwritten.
           </p>
@@ -201,31 +201,31 @@ export default function ResumePage() {
           <button
             onClick={() => fileInput.current?.click()}
             disabled={busy}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
           >
             {busy ? "Uploading…" : "Upload resume"}
           </button>
 
           {/* Downloads grouped into one control instead of three loose buttons, which
               read as unrelated actions and cluttered the header. */}
-          <div className="flex overflow-hidden rounded-lg border border-zinc-300 dark:border-zinc-700">
+          <div className="flex overflow-hidden rounded-lg border border-[var(--border-strong)]">
             <button
               onClick={() => download("pdf")}
               disabled={!canShowDocument}
-              className="px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-40 dark:hover:bg-zinc-800"
+              className="px-3 py-2 text-sm hover:bg-[var(--surface-page)] disabled:opacity-40 dark:hover:bg-zinc-800"
             >
               PDF
             </button>
             <button
               onClick={() => download("tex")}
               disabled={!hasLatex}
-              className="border-l border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="border-l border-[var(--border-strong)] px-3 py-2 text-sm hover:bg-[var(--surface-page)] disabled:opacity-40 dark:hover:bg-zinc-800"
             >
               .tex
             </button>
             <button
               onClick={() => download("txt")}
-              className="border-l border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="border-l border-[var(--border-strong)] px-3 py-2 text-sm hover:bg-[var(--surface-page)] dark:hover:bg-zinc-800"
             >
               .txt
             </button>
@@ -245,9 +245,9 @@ export default function ResumePage() {
       )}
 
       {!active?.exists && (
-        <div className="rounded-lg border border-dashed border-zinc-300 p-12 text-center dark:border-zinc-700">
+        <div className="rounded-lg border border-dashed border-[var(--border-strong)] p-12 text-center">
           <p className="text-sm font-medium">No resume yet</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-zinc-500">
+          <p className="mx-auto mt-1 max-w-md text-sm text-[var(--text-muted)]">
             Upload a <strong>.pdf</strong>, <strong>.tex</strong>, <strong>.docx</strong> or
             <strong> .txt</strong>. Upload <strong>.tex</strong> if you have it — it&apos;s the
             only format where an AI edit produces a document you can compile and send straight
@@ -255,7 +255,7 @@ export default function ResumePage() {
           </p>
           <button
             onClick={() => fileInput.current?.click()}
-            className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white dark:bg-white dark:text-zinc-900"
+            className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
           >
             Choose a file
           </button>
@@ -265,8 +265,8 @@ export default function ResumePage() {
       {active?.exists && (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
           {/* ---------- viewer / editor ---------- */}
-          <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+          <section className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)]">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-3 py-2">
               <div className="flex gap-1">
                 {tabs.map((t) => (
                   <button
@@ -276,8 +276,8 @@ export default function ResumePage() {
                     title={t.hint}
                     className={`rounded px-3 py-1.5 text-xs transition disabled:opacity-40 ${
                       tab === t.id
-                        ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                        : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        ? "bg-zinc-900 text-white dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
+                        : "text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] dark:hover:bg-zinc-800"
                     }`}
                   >
                     {t.label}
@@ -290,7 +290,7 @@ export default function ResumePage() {
                   <button
                     onClick={renderPdf}
                     disabled={rendering || !canShowDocument}
-                    className="rounded border border-zinc-300 px-2.5 py-1 text-xs disabled:opacity-40 dark:border-zinc-700"
+                    className="rounded border border-[var(--border-strong)] px-2.5 py-1 text-xs disabled:opacity-40"
                   >
                     {rendering ? "Rendering…" : "Refresh"}
                   </button>
@@ -299,7 +299,7 @@ export default function ResumePage() {
                   <button
                     onClick={handleSave}
                     disabled={busy || !dirty}
-                    className="rounded bg-zinc-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
+                    className="rounded bg-zinc-900 px-3 py-1 text-xs text-white disabled:opacity-40 dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
                   >
                     {dirty ? "Save as new version" : "Saved"}
                   </button>
@@ -308,13 +308,13 @@ export default function ResumePage() {
             </div>
 
             {tab === "document" ? (
-              <div className="h-[calc(100vh-230px)] min-h-[600px] bg-zinc-100 dark:bg-zinc-950">
+              <div className="h-[calc(100vh-230px)] min-h-[600px] bg-[var(--surface-sunken)]">
                 {pdfError ? (
                   <div className="p-5">
                     <p className="whitespace-pre-wrap text-xs text-red-600">{pdfError}</p>
                     <button
                       onClick={() => send("Fix the LaTeX so it compiles — use only standard packages (article, geometry, enumitem, hyperref)")}
-                      className="mt-3 rounded bg-zinc-900 px-3 py-1.5 text-xs text-white dark:bg-white dark:text-zinc-900"
+                      className="mt-3 rounded bg-zinc-900 px-3 py-1.5 text-xs text-white dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
                     >
                       Ask the assistant to fix it
                     </button>
@@ -327,10 +327,10 @@ export default function ResumePage() {
                   // AI-tailored versions are plain text, so this is the COMMON case right
                   // after a tailor, not an edge case.
                   <div className="p-5">
-                    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <p className="text-sm font-medium text-[var(--text-secondary)]">
                       This version is plain text.
                     </p>
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
                       There is no LaTeX source or uploaded PDF for{" "}
                       <strong>{active?.label ?? "this version"}</strong>, so there is no
                       document to display. Read it under <strong>Text</strong>, or convert
@@ -338,13 +338,13 @@ export default function ResumePage() {
                     </p>
                     <button
                       onClick={() => send("Convert my resume to LaTeX")}
-                      className="mt-3 rounded bg-zinc-900 px-3 py-1.5 text-xs text-white dark:bg-white dark:text-zinc-900"
+                      className="mt-3 rounded bg-zinc-900 px-3 py-1.5 text-xs text-white dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
                     >
                       Convert to LaTeX
                     </button>
                   </div>
                 ) : rendering || !pdfUrl ? (
-                  <p className="p-5 text-xs text-zinc-500">Rendering document…</p>
+                  <p className="p-5 text-xs text-[var(--text-muted)]">Rendering document…</p>
                 ) : (
                   <iframe src={pdfUrl} className="h-full w-full" title="Resume document" />
                 )}
@@ -365,8 +365,8 @@ export default function ResumePage() {
 
           {/* ---------- assistant + versions ---------- */}
           <div className="space-y-5">
-            <section className="flex h-[440px] flex-col rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="border-b border-zinc-200 px-4 py-2.5 text-sm font-semibold dark:border-zinc-800">
+            <section className="flex h-[440px] flex-col rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)]">
+              <h2 className="border-b border-[var(--border-subtle)] px-4 py-2.5 text-sm font-semibold">
                 Resume assistant
               </h2>
 
@@ -377,7 +377,7 @@ export default function ResumePage() {
                       <button
                         key={q}
                         onClick={() => send(q)}
-                        className="block w-full rounded border border-zinc-200 px-2 py-1.5 text-left text-xs text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                        className="block w-full rounded border border-[var(--border-subtle)] px-2 py-1.5 text-left text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-page)] dark:hover:bg-zinc-800"
                       >
                         {q}
                       </button>
@@ -390,25 +390,25 @@ export default function ResumePage() {
                     key={i}
                     className={`rounded p-2 text-xs ${
                       turn.role === "user"
-                        ? "bg-zinc-100 dark:bg-zinc-800"
-                        : "border border-zinc-200 dark:border-zinc-700"
+                        ? "bg-[var(--surface-sunken)]"
+                        : "border border-[var(--border-subtle)]"
                     }`}
                   >
-                    <div className="mb-1 font-medium text-zinc-500">
+                    <div className="mb-1 font-medium text-[var(--text-muted)]">
                       {turn.role === "user" ? "You" : "Assistant"}
                     </div>
-                    <p className="whitespace-pre-wrap text-zinc-800 dark:text-zinc-200">
+                    <p className="whitespace-pre-wrap text-[var(--text-primary)]">
                       {turn.text}
                     </p>
                     {turn.toolCalls?.length ? (
-                      <p className="mt-1.5 border-t border-zinc-200 pt-1 text-[10px] text-zinc-400 dark:border-zinc-700">
+                      <p className="mt-1.5 border-t border-[var(--border-subtle)] pt-1 text-[10px] text-[var(--text-muted)]">
                         tools: {turn.toolCalls.map((t) => t.tool).join(", ")}
                       </p>
                     ) : null}
                   </div>
                 ))}
 
-                {thinking && <p className="text-xs text-zinc-500">Working…</p>}
+                {thinking && <p className="text-xs text-[var(--text-muted)]">Working…</p>}
               </div>
 
               <form
@@ -416,27 +416,27 @@ export default function ResumePage() {
                   e.preventDefault();
                   send(message);
                 }}
-                className="flex gap-2 border-t border-zinc-200 p-2.5 dark:border-zinc-800"
+                className="flex gap-2 border-t border-[var(--border-subtle)] p-2.5"
               >
                 <input
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Ask for a change…"
-                  className="flex-1 rounded border border-zinc-300 px-2 py-1.5 text-xs dark:border-zinc-700 dark:bg-zinc-800"
+                  className="flex-1 rounded border border-[var(--border-strong)] px-2 py-1.5 text-xs"
                 />
                 <button
                   type="submit"
                   disabled={thinking}
-                  className="rounded bg-zinc-900 px-3 py-1.5 text-xs text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+                  className="rounded bg-zinc-900 px-3 py-1.5 text-xs text-white disabled:opacity-50 dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
                 >
                   Send
                 </button>
               </form>
             </section>
 
-            <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-4">
               <h2 className="mb-1 text-base font-semibold">Versions</h2>
-              <p className="mb-3 text-[11px] text-zinc-500">Click any version to restore it.</p>
+              <p className="mb-3 text-[11px] text-[var(--text-muted)]">Click any version to restore it.</p>
               <ul className="max-h-60 space-y-1.5 overflow-y-auto">
                 {versions.map((v) => (
                   <li
@@ -444,7 +444,7 @@ export default function ResumePage() {
                     className={`group flex items-start gap-1 rounded border px-2 py-1.5 ${
                       v.is_active
                         ? "border-zinc-900 dark:border-white"
-                        : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                        : "border-[var(--border-subtle)] hover:bg-[var(--surface-page)] dark:hover:bg-zinc-800"
                     }`}
                   >
                     <button
@@ -457,12 +457,12 @@ export default function ResumePage() {
                       <div className="flex items-center gap-2">
                         <span className="truncate font-medium">{v.label}</span>
                         {v.is_active && (
-                          <span className="shrink-0 rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-white dark:bg-white dark:text-zinc-900">
+                          <span className="shrink-0 rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-white dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]">
                             active
                           </span>
                         )}
                       </div>
-                      <div className="mt-0.5 text-[10px] text-zinc-500">
+                      <div className="mt-0.5 text-[10px] text-[var(--text-muted)]">
                         {v.origin.replace("_", " ")}
                         {v.has_latex && " · LaTeX"}
                         {" · "}
@@ -475,7 +475,7 @@ export default function ResumePage() {
                         onClick={() => deleteVersion(v.id, v.label)}
                         title="Delete this version"
                         aria-label={`Delete ${v.label}`}
-                        className="shrink-0 rounded border border-zinc-200 px-2 py-0.5 text-xs text-zinc-500 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:border-zinc-700 dark:hover:bg-red-950"
+                        className="shrink-0 rounded border border-[var(--border-subtle)] px-2 py-0.5 text-xs text-[var(--text-muted)] transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
                       >
                         Delete
                       </button>

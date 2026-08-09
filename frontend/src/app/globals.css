@@ -1,26 +1,135 @@
 @import "tailwindcss";
 
+/*
+ * Theme tokens.
+ *
+ * Everything here is defined as a CSS variable rather than sprinkled through components,
+ * so a colour is changed in one place and the whole app follows. Dark mode redefines only
+ * the tokens — no component knows which mode it is in.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* Surfaces: warm neutrals, not pure white and not blue-grey.
+     Pure #ffffff against a bright monitor is genuinely tiring over a long session, and
+     the blue-tinted greys most UI kits ship make an already blue-heavy interface colder.
+     A hint of warmth (a few points toward yellow) reads as paper rather than as screen. */
+  --surface-page: #faf9f7;   /* the page behind everything */
+  --surface-card: #ffffff;   /* cards sit slightly ABOVE the page, hence still white */
+  --surface-sunken: #f4f2ef; /* wells, previews, code blocks */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --border-subtle: #e8e5e0;
+  --border-strong: #d6d2cb;
+
+  --text-primary: #1c1b19;
+  --text-secondary: #55524d;
+  --text-muted: #8b877f;
+
+  /* Chart ink.
+     The magnitude bars are deliberately NEUTRAL. A bar's LENGTH already encodes its
+     value, so painting it a saturated hue adds no information and, at bar-sized blocks,
+     a lot of intensity — the viz guidance is explicit that saturated fills belong on
+     small marks and accents, never on large areas.
+     Colour is therefore reserved for the one chart where hue carries meaning: the
+     diverging premium chart, where blue and red mean above and below. That chart stands
+     out BECAUSE it is the only coloured one. */
+  --chart-neutral: #6b6862;
+  --chart-neutral-soft: #a8a49c;
+  --chart-positive: #2a78d6;  /* validated pair, light mode */
+  --chart-negative: #e34948;
+  --chart-grid: #e8e5e0;
+
+  --accent: #1c1b19;          /* primary buttons: ink, not a brand hue */
+  --accent-text: #faf9f7;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    /* Dark is SELECTED, not an inversion. #000 with white text vibrates; a warm near-black
+       with slightly-dimmed text is what stays readable at night. */
+    --surface-page: #121211;
+    --surface-card: #1a1a19;
+    --surface-sunken: #232322;
+
+    --border-subtle: #2e2e2c;
+    --border-strong: #3d3d3a;
+
+    --text-primary: #ecebe8;
+    --text-secondary: #a8a49c;
+    --text-muted: #78746d;
+
+    --chart-neutral: #94908a;
+    --chart-neutral-soft: #5c5952;
+    --chart-positive: #3987e5;   /* validated pair, dark mode */
+    --chart-negative: #e66767;
+    --chart-grid: #2e2e2c;
+
+    --accent: #ecebe8;
+    --accent-text: #1a1a19;
   }
 }
 
+@theme inline {
+  --color-background: var(--surface-page);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--surface-page);
+  color: var(--text-primary);
+  /* The Geist variable, not Arial.
+     layout.tsx loads Geist and exposes it as --font-geist-sans, and this rule used to
+     override it with `Arial, Helvetica, sans-serif` — so the font was downloaded on every
+     page load and then thrown away. Default boilerplate that nobody re-read. */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular figures wherever numbers are compared down a column. Proportional digits make
+   a column of salaries ragged, because 1 is narrower than 8. */
+.tabular-nums,
+table td,
+table th {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus ring: visible, and the same everywhere. Removing outlines is the single most
+   common accessibility regression in a hand-styled app. */
+:focus-visible {
+  outline: 2px solid var(--chart-positive);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--chart-positive) 22%, transparent);
+}
+
+/* Scrollbars, so a scrolling panel doesn't cut a bright grey channel through a dark
+   surface. Firefox uses the standard properties; WebKit needs its own. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+  background-clip: content-box;
 }

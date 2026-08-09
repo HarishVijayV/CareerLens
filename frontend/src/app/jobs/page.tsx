@@ -150,7 +150,7 @@ export default function JobsPage() {
     <AppShell>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Jobs</h1>
-        <p className="mt-1 text-base text-zinc-500">
+        <p className="mt-1 text-base text-[var(--text-muted)]">
           Searching the curated warehouse — {total.toLocaleString()} postings match.
         </p>
       </div>
@@ -161,23 +161,23 @@ export default function JobsPage() {
           e.preventDefault();
           load(0);
         }}
-        className="mb-5 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+        className="mb-5 flex flex-wrap items-end gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-4"
       >
-        <label className="flex flex-col gap-1 text-sm text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
           Title
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="e.g. Data Engineer"
-            className="w-44 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-44 rounded border border-[var(--border-strong)] px-3 py-2 text-[15px]"
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
           Skill
           <select
             value={skill}
             onChange={(e) => setSkill(e.target.value)}
-            className="w-36 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-36 rounded border border-[var(--border-strong)] px-3 py-2 text-[15px]"
           >
             <option value="">Any skill</option>
             {filters.skills.map((s) => (
@@ -187,7 +187,7 @@ export default function JobsPage() {
         </label>
 
         <label
-          className="flex cursor-pointer select-none items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400"
+          className="flex cursor-pointer select-none items-center gap-2 text-sm text-[var(--text-secondary)]"
           title={
             profile
               ? `Ranks ${profileRegions(profile).join(", ") || "your regions"} first, then roles wanting your skills`
@@ -203,12 +203,12 @@ export default function JobsPage() {
           Match my profile
         </label>
 
-        <label className="flex flex-col gap-1 text-sm text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
           Region
           <select
             value={region}
             onChange={(e) => setRegion(e.target.value)}
-            className="w-36 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-36 rounded border border-[var(--border-strong)] px-3 py-2 text-[15px]"
           >
             <option value="">Any region</option>
             {filters.regions.map((r) => (
@@ -220,12 +220,12 @@ export default function JobsPage() {
         {/* Provenance filter. Counts are shown in the labels because "real postings" is
             only meaningful next to how many there are — 4,911 of 151,883 sets a very
             different expectation than the bare word does. */}
-        <label className="flex flex-col gap-1 text-sm text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
           Source
           <select
             value={sourceType}
             onChange={(e) => setSourceType(e.target.value)}
-            className="w-44 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-44 rounded border border-[var(--border-strong)] px-3 py-2 text-[15px]"
           >
             <option value="">All (real listed first)</option>
             <option value="real">
@@ -241,12 +241,12 @@ export default function JobsPage() {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1 text-sm text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
           Pay vs market
           <select
             value={payBand}
             onChange={(e) => setPayBand(e.target.value)}
-            className="w-36 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-36 rounded border border-[var(--border-strong)] px-3 py-2 text-[15px]"
           >
             <option value="">Any</option>
             <option value="above_market">Above market</option>
@@ -254,12 +254,12 @@ export default function JobsPage() {
             <option value="below_market">Below market</option>
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
           Seniority
           <select
             value={seniority}
             onChange={(e) => setSeniority(e.target.value)}
-            className="w-28 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-28 rounded border border-[var(--border-strong)] px-3 py-2 text-[15px]"
           >
             <option value="">Any</option>
             {filters.seniorities.map((s) => (
@@ -267,17 +267,17 @@ export default function JobsPage() {
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm text-zinc-500">
+        <label className="flex flex-col gap-1 text-sm text-[var(--text-muted)]">
           Min salary
           <input
             type="number"
             value={minSalary}
             onChange={(e) => setMinSalary(e.target.value)}
             placeholder="100000"
-            className="w-28 rounded border border-zinc-300 px-3 py-2 text-[15px] dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-28 rounded border border-[var(--border-strong)] px-3 py-2 text-[15px]"
           />
         </label>
-        <label className="flex items-center gap-2 pb-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+        <label className="flex items-center gap-2 pb-1.5 text-sm text-[var(--text-secondary)]">
           <input
             type="checkbox"
             checked={remoteOnly}
@@ -288,7 +288,7 @@ export default function JobsPage() {
         <button
           type="submit"
           disabled={loading}
-          className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+          className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
         >
           {loading ? "Searching…" : "Search"}
         </button>
@@ -300,9 +300,9 @@ export default function JobsPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)]">
         <table className="w-full text-left text-[15px]">
-          <thead className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800">
+          <thead className="border-b border-[var(--border-subtle)] text-xs text-[var(--text-muted)]">
             <tr>
               <th className="px-4 py-2.5 font-medium">Title</th>
               <th className="px-4 py-2.5 font-medium">Company</th>
@@ -319,9 +319,9 @@ export default function JobsPage() {
             {jobs.map((job) => (
               <tr
                 key={job.posting_id}
-                className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
+                className="border-b border-[var(--border-subtle)] last:border-0 hover:bg-[var(--surface-page)]/60 dark:hover:bg-zinc-800/40"
               >
-                <td className="px-4 py-2.5 font-medium text-zinc-900 dark:text-zinc-100">
+                <td className="px-4 py-2.5 font-medium text-[var(--text-primary)]">
                   {job.url ? (
                     // A real posting has somewhere to apply. Linking the title is the
                     // whole point of ingesting real data — without it the row is just
@@ -347,21 +347,21 @@ export default function JobsPage() {
                   ) : (
                     <span
                       title="Generated posting — exists to give the pipeline volume, not applyable"
-                      className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
+                      className="ml-2 rounded bg-[var(--surface-sunken)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] dark:text-[var(--text-muted)]"
                     >
                       sample
                     </span>
                   )}
                   {job.remote && (
-                    <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                    <span className="ml-2 rounded bg-[var(--surface-sunken)] px-1.5 py-0.5 text-[10px] text-[var(--text-secondary)]">
                       remote
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400">{job.company_name ?? "—"}</td>
-                <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400">{job.location ?? "—"}</td>
-                <td className="px-4 py-2.5 text-zinc-600 dark:text-zinc-400">{job.seniority ?? "—"}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
+                <td className="px-4 py-2.5 text-[var(--text-secondary)]">{job.company_name ?? "—"}</td>
+                <td className="px-4 py-2.5 text-[var(--text-secondary)]">{job.location ?? "—"}</td>
+                <td className="px-4 py-2.5 text-[var(--text-secondary)]">{job.seniority ?? "—"}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-secondary)]">
                   {money(job.salary)}
                 </td>
                 <td className="px-4 py-2">
@@ -373,7 +373,7 @@ export default function JobsPage() {
                           ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
                           : job.pay_band === "below_market"
                           ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                          : "bg-[var(--surface-sunken)] text-[var(--text-secondary)]"
                       }`}
                     >
                       {job.pay_band === "above_market"
@@ -383,7 +383,7 @@ export default function JobsPage() {
                         : "at market"}
                     </span>
                   ) : (
-                    <span className="text-[10px] text-zinc-400">—</span>
+                    <span className="text-[10px] text-[var(--text-muted)]">—</span>
                   )}
                 </td>
 
@@ -399,7 +399,7 @@ export default function JobsPage() {
                     <button
                       onClick={() => applyTo(job)}
                       disabled={applying === job.posting_id}
-                      className="rounded border border-zinc-300 px-2.5 py-1 text-xs font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                      className="rounded border border-[var(--border-strong)] px-2.5 py-1 text-xs font-medium hover:bg-[var(--surface-page)] disabled:opacity-50 dark:hover:bg-zinc-800"
                     >
                       {applying === job.posting_id ? "…" : "Apply"}
                     </button>
@@ -407,7 +407,7 @@ export default function JobsPage() {
                     // Generated postings have nowhere to apply. A disabled-looking dash is
                     // honest; an Apply button that opened nothing would be worse than none.
                     <span
-                      className="text-xs text-zinc-400"
+                      className="text-xs text-[var(--text-muted)]"
                       title="Generated posting — no real listing to apply to"
                     >
                       —
@@ -418,7 +418,7 @@ export default function JobsPage() {
             ))}
             {!jobs.length && !loading && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-zinc-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-[var(--text-muted)]">
                   No postings match these filters.
                 </td>
               </tr>
@@ -428,21 +428,21 @@ export default function JobsPage() {
       </div>
 
       <div className="mt-4 flex items-center justify-between text-sm">
-        <span className="text-zinc-500">
+        <span className="text-[var(--text-muted)]">
           {total ? `${offset + 1}–${Math.min(offset + PAGE_SIZE, total)} of ${total.toLocaleString()}` : ""}
         </span>
         <div className="flex gap-2">
           <button
             onClick={() => load(Math.max(0, offset - PAGE_SIZE))}
             disabled={offset === 0 || loading}
-            className="rounded border border-zinc-300 px-3 py-1 disabled:opacity-40 dark:border-zinc-700"
+            className="rounded border border-[var(--border-strong)] px-3 py-1 disabled:opacity-40"
           >
             Previous
           </button>
           <button
             onClick={() => load(offset + PAGE_SIZE)}
             disabled={offset + PAGE_SIZE >= total || loading}
-            className="rounded border border-zinc-300 px-3 py-1 disabled:opacity-40 dark:border-zinc-700"
+            className="rounded border border-[var(--border-strong)] px-3 py-1 disabled:opacity-40"
           >
             Next
           </button>

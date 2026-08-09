@@ -37,7 +37,7 @@ export default function LoginPage() {
       footer={
         <>
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="font-medium text-zinc-900 underline dark:text-zinc-100">
+          <Link href="/signup" className="font-medium text-[var(--text-primary)] underline">
             Sign up
           </Link>
         </>

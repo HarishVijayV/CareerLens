@@ -47,7 +47,7 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-semibold">
           {profile?.full_name ? `Welcome back, ${profile.full_name.split(" ")[0]}` : "Dashboard"}
         </h1>
-        <p className="mt-1 text-base text-zinc-500">
+        <p className="mt-1 text-base text-[var(--text-muted)]">
           Job-market data pipeline with a multi-agent AI assistant.
         </p>
       </div>
@@ -75,10 +75,10 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-5">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold">Jobs for you</h2>
-            <Link href="/jobs" className="text-xs text-zinc-500 underline">
+            <Link href="/jobs" className="text-xs text-[var(--text-muted)] underline">
               See all
             </Link>
           </div>
@@ -87,35 +87,35 @@ export default function DashboardPage() {
               {matches.map((job) => (
                 <li
                   key={job.posting_id}
-                  className="flex items-center justify-between gap-3 border-b border-zinc-100 pb-2 last:border-0 dark:border-zinc-800/60"
+                  className="flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] pb-2 last:border-0/60"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium">{job.title}</div>
-                    <div className="truncate text-xs text-zinc-500">
+                    <div className="truncate text-xs text-[var(--text-muted)]">
                       {job.company_name} · {job.location}
                     </div>
                   </div>
-                  <div className="shrink-0 text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
+                  <div className="shrink-0 text-sm tabular-nums text-[var(--text-secondary)]">
                     {job.salary ? `$${job.salary.toLocaleString()}` : "—"}
                   </div>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-[var(--text-muted)]">
               No matches yet — fill in your profile, then run the pipeline.
             </p>
           )}
         </section>
 
-        <section className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-5">
           <h2 className="mb-3 text-base font-semibold">What you can do here</h2>
           <ul className="space-y-3 text-sm">
             <li>
               <Link href="/analytics" className="font-medium underline">
                 Analytics
               </Link>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-[var(--text-muted)]">
                 Skill demand, salary by seniority and region, hiring seasonality — all computed
                 by the Spark + dbt pipeline.
               </p>
@@ -124,7 +124,7 @@ export default function DashboardPage() {
               <Link href="/copilot" className="font-medium underline">
                 Assistant
               </Link>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-[var(--text-muted)]">
                 Ask questions in plain English. Agents call real tools against your data and
                 show you every call they made.
               </p>
@@ -133,7 +133,7 @@ export default function DashboardPage() {
               <Link href="/jobs" className="font-medium underline">
                 Jobs
               </Link>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-[var(--text-muted)]">
                 Search the curated warehouse by title, skill, seniority, salary and location.
               </p>
             </li>

@@ -22,7 +22,7 @@ export default function AuthLayout({
   footer: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-white dark:bg-zinc-950">
+    <div className="flex min-h-screen bg-[var(--surface-card)]">
       {/* ---------- brand panel (desktop only) ---------- */}
       <aside className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-zinc-900 p-12 text-white lg:flex">
         {/* soft radial wash — keeps the dark panel from reading as a flat black slab */}
@@ -43,7 +43,7 @@ export default function AuthLayout({
           <h2 className="text-3xl font-semibold leading-tight">
             Job market intelligence, built from the data up.
           </h2>
-          <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+          <p className="mt-4 text-sm leading-relaxed text-[var(--text-muted)]">
             A distributed pipeline processes job postings at scale, a warehouse models them,
             and a team of AI agents helps you find, match and tailor your way into the right
             role.
@@ -57,13 +57,13 @@ export default function AuthLayout({
             ].map((stat) => (
               <div key={stat.label}>
                 <dt className="text-2xl font-semibold tabular-nums">{stat.value}</dt>
-                <dd className="mt-1 text-xs leading-snug text-zinc-500">{stat.label}</dd>
+                <dd className="mt-1 text-xs leading-snug text-[var(--text-muted)]">{stat.label}</dd>
               </div>
             ))}
           </dl>
         </div>
 
-        <div className="relative flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-600">
+        <div className="relative flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)]">
           {["PySpark", "Kafka", "Airflow", "dbt", "FastAPI", "Next.js"].map((t) => (
             <span key={t}>{t}</span>
           ))}
@@ -80,14 +80,14 @@ export default function AuthLayout({
             CareerLens
           </Link>
 
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
             {title}
           </h1>
-          <p className="mt-2 text-sm text-zinc-500">{subtitle}</p>
+          <p className="mt-2 text-sm text-[var(--text-muted)]">{subtitle}</p>
 
           <div className="mt-8">{children}</div>
 
-          <p className="mt-8 text-sm text-zinc-500">{footer}</p>
+          <p className="mt-8 text-sm text-[var(--text-muted)]">{footer}</p>
         </div>
       </main>
     </div>
@@ -96,17 +96,17 @@ export default function AuthLayout({
 
 /** Shared field styling, so login and signup can't drift apart visually. */
 export const fieldClass =
-  "w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 " +
-  "outline-none transition placeholder:text-zinc-400 " +
+  "w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-card)] px-3.5 py-2.5 text-sm text-[var(--text-primary)] " +
+  "outline-none transition placeholder:text-[var(--text-muted)] " +
   "focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 " +
-  "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100 " +
+  " dark:focus:border-[var(--border-subtle)] " +
   "dark:focus:ring-zinc-100/10";
 
 export const labelClass =
-  "mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  "mb-1.5 block text-sm font-medium text-[var(--text-secondary)]";
 
 export const buttonClass =
   "w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition " +
   "hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900/20 " +
   "disabled:cursor-not-allowed disabled:opacity-50 " +
-  "dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200";
+  "dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)] dark:hover:bg-zinc-200";

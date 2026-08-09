@@ -131,15 +131,15 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <AppShell>
-        <p className="text-sm text-zinc-500">{error ?? "Loading profile…"}</p>
+        <p className="text-sm text-[var(--text-muted)]">{error ?? "Loading profile…"}</p>
       </AppShell>
     );
   }
 
   const input =
-    "w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-[15px] dark:border-zinc-700 dark:bg-zinc-800";
-  const labelCls = "flex flex-col gap-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300";
-  const hint = "text-xs font-normal text-zinc-500";
+    "w-full rounded-lg border border-[var(--border-strong)] px-3 py-2.5 text-[15px]";
+  const labelCls = "flex flex-col gap-1.5 text-sm font-medium text-[var(--text-secondary)]";
+  const hint = "text-xs font-normal text-[var(--text-muted)]";
 
   const filledCount = FILLABLE.filter((k) => (profile[k] ?? "").toString().trim()).length;
 
@@ -147,7 +147,7 @@ export default function ProfilePage() {
     <AppShell>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Your Profile</h1>
-        <p className="mt-1 text-base text-zinc-500">
+        <p className="mt-1 text-base text-[var(--text-muted)]">
           This drives everything: which jobs get fetched from the job boards, how postings are
           ranked for you, and what the AI agents know when they tailor your resume.
         </p>
@@ -157,13 +157,13 @@ export default function ProfilePage() {
           asking someone to retype it is busywork — and a retyped skill list drifts out of
           sync with the resume the moment either changes. The fields stay editable because
           extraction is a starting point, not an authority. */}
-      <div className="mb-6 max-w-4xl rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-5 dark:border-zinc-700 dark:bg-zinc-900/50">
+      <div className="mb-6 max-w-4xl rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--surface-page)] p-5/50">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">
               Fill this in from your resume
             </h2>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
               Upload a PDF, .tex or .txt and the fields below get filled in for you. Nothing
               is saved until you review it and press Save.
             </p>
@@ -171,7 +171,7 @@ export default function ProfilePage() {
 
           <div className="flex shrink-0 items-center gap-2">
             <label
-              className={`cursor-pointer rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700 ${
+              className={`cursor-pointer rounded-lg border border-[var(--border-strong)] bg-[var(--surface-card)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-page)] dark:hover:bg-zinc-700 ${
                 extracting ? "pointer-events-none opacity-60" : ""
               }`}
             >
@@ -195,7 +195,7 @@ export default function ProfilePage() {
               type="button"
               onClick={() => extractFromExisting()}
               disabled={extracting}
-              className="rounded-lg px-3 py-2 text-sm text-zinc-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-zinc-400"
+              className="rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] underline-offset-2 hover:underline disabled:opacity-50"
             >
               Use my saved resume
             </button>
@@ -213,7 +213,7 @@ export default function ProfilePage() {
           </p>
         )}
         {!extractNote && !extractError && filledCount === 0 && (
-          <p className="mt-3 text-sm text-zinc-500">
+          <p className="mt-3 text-sm text-[var(--text-muted)]">
             Your profile is empty — job search and matching won&apos;t work well until it has
             your skills.
           </p>
@@ -221,7 +221,7 @@ export default function ProfilePage() {
       </div>
 
       <form onSubmit={handleSave} className="max-w-4xl space-y-5">
-        <div className="grid gap-5 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 sm:grid-cols-2">
+        <div className="grid gap-5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-5 sm:grid-cols-2">
           <label className={labelCls}>
             Full name
             <input
@@ -266,7 +266,7 @@ export default function ProfilePage() {
           </label>
         </div>
 
-        <div className="grid gap-5 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 sm:grid-cols-2">
+        <div className="grid gap-5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-5 sm:grid-cols-2">
           <label className={labelCls}>
             Countries
             <span className={hint}>
@@ -311,7 +311,7 @@ export default function ProfilePage() {
               onChange={(e) => set("min_salary", e.target.value ? Number(e.target.value) : null)}
             />
           </label>
-          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 sm:col-span-2">
+          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] sm:col-span-2">
             <input
               type="checkbox"
               checked={profile.remote_only}
@@ -333,7 +333,7 @@ export default function ProfilePage() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-zinc-900 px-6 py-2.5 text-base font-medium text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+            className="rounded-lg bg-zinc-900 px-6 py-2.5 text-base font-medium text-white disabled:opacity-50 dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
           >
             {saving ? "Saving…" : "Save profile"}
           </button>

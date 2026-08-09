@@ -54,18 +54,18 @@ const STACK = [
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
+    <div className="min-h-screen bg-[var(--surface-card)] text-[var(--text-primary)]">
       {/* ---------------------------------------------------------------- nav */}
-      <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
+      <header className="sticky top-0 z-10 border-b border-[var(--border-subtle)] bg-[var(--surface-card)]/80 backdrop-blur/80">
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <span className="text-lg font-semibold tracking-tight">CareerLens</span>
           <div className="flex items-center gap-3 text-sm">
-            <Link href="/login" className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100">
+            <Link href="/login" className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] dark:hover:text-zinc-100">
               Log in
             </Link>
             <Link
               href="/signup"
-              className="rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              className="rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white transition hover:bg-zinc-800 dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)] dark:hover:bg-zinc-200"
             >
               Get started
             </Link>
@@ -84,7 +84,7 @@ export default function HomePage() {
           }}
         />
         <div className="relative mx-auto max-w-6xl px-6 py-20 sm:py-28">
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--border-subtle)] px-3 py-1 text-xs text-[var(--text-secondary)]">
             <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
             Distributed pipeline · multi-agent AI · production-shaped
           </p>
@@ -95,7 +95,7 @@ export default function HomePage() {
             and where you fit in it.
           </h1>
 
-          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-zinc-600 dark:text-zinc-400">
+          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-[var(--text-secondary)]">
             CareerLens ingests job postings at scale, processes them through a Spark
             pipeline into a modelled warehouse, and puts a team of AI agents on top — to
             find roles, score your resume against them, tailor it, and track every
@@ -105,13 +105,13 @@ export default function HomePage() {
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
               href="/signup"
-              className="rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              className="rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)] dark:hover:bg-zinc-200"
             >
               Create an account
             </Link>
             <Link
               href="/login"
-              className="rounded-lg border border-zinc-300 px-6 py-3 text-sm font-medium transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="rounded-lg border border-[var(--border-strong)] px-6 py-3 text-sm font-medium transition hover:bg-[var(--surface-page)] dark:hover:bg-zinc-900"
             >
               Sign in
             </Link>
@@ -120,15 +120,15 @@ export default function HomePage() {
       </section>
 
       {/* ---------------------------------------------------------------- stats */}
-      <section className="border-y border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <section className="border-y border-[var(--border-subtle)] bg-[var(--surface-page)]/40">
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 py-12 lg:grid-cols-4">
           {STATS.map((stat) => (
             <div key={stat.label}>
               <div className="text-3xl font-semibold tabular-nums">{stat.value}</div>
-              <div className="mt-1 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <div className="mt-1 text-sm font-medium text-[var(--text-secondary)]">
                 {stat.label}
               </div>
-              <div className="mt-0.5 text-xs text-zinc-500">{stat.detail}</div>
+              <div className="mt-0.5 text-xs text-[var(--text-muted)]">{stat.detail}</div>
             </div>
           ))}
         </div>
@@ -141,7 +141,7 @@ export default function HomePage() {
           {FEATURES.map((feature) => (
             <div key={feature.title}>
               <h3 className="text-base font-medium">{feature.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+              <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
                 {feature.body}
               </p>
             </div>
@@ -150,10 +150,10 @@ export default function HomePage() {
       </section>
 
       {/* ---------------------------------------------------------------- pipeline */}
-      <section className="border-y border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <section className="border-y border-[var(--border-subtle)] bg-[var(--surface-page)]/40">
         <div className="mx-auto max-w-6xl px-6 py-20">
           <h2 className="text-2xl font-semibold tracking-tight">How the data gets here</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[var(--text-secondary)]">
             Nothing reaches the app until it has been cleaned, modelled and tested. If the
             data is wrong, the pipeline fails at the quality gate rather than serving bad
             numbers to a dashboard.
@@ -168,11 +168,11 @@ export default function HomePage() {
               ["Serve", "Postgres for the app, Snowflake for historical analytics"],
             ].map(([title, body], i) => (
               <li key={title} className="relative">
-                <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-medium text-white dark:bg-white dark:text-zinc-900">
+                <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-zinc-900 text-xs font-medium text-white dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]">
                   {i + 1}
                 </div>
                 <h3 className="text-sm font-medium">{title}</h3>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
                   {body}
                 </p>
               </li>
@@ -187,12 +187,12 @@ export default function HomePage() {
         <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {STACK.map((column) => (
             <div key={column.group}>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                 {column.group}
               </h3>
               <ul className="mt-3 space-y-1.5">
                 {column.items.map((item) => (
-                  <li key={item} className="text-sm text-zinc-700 dark:text-zinc-300">
+                  <li key={item} className="text-sm text-[var(--text-secondary)]">
                     {item}
                   </li>
                 ))}
@@ -203,25 +203,25 @@ export default function HomePage() {
       </section>
 
       {/* ---------------------------------------------------------------- cta */}
-      <section className="border-t border-zinc-200 dark:border-zinc-800">
+      <section className="border-t border-[var(--border-subtle)]">
         <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-6 py-16 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold tracking-tight">Ready to look around?</h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
               Create an account and start with your profile — it drives everything else.
             </p>
           </div>
           <Link
             href="/signup"
-            className="rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+            className="rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-800 dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)] dark:hover:bg-zinc-200"
           >
             Get started
           </Link>
         </div>
       </section>
 
-      <footer className="border-t border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-6xl px-6 py-8 text-xs text-zinc-500">
+      <footer className="border-t border-[var(--border-subtle)]">
+        <div className="mx-auto max-w-6xl px-6 py-8 text-xs text-[var(--text-muted)]">
           CareerLens — a portfolio project. Every figure above was measured on this
           machine; the raw output is committed in <code>pipeline/data/</code>.
         </div>

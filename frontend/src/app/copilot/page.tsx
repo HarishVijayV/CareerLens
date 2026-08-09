@@ -148,7 +148,7 @@ export default function AssistantPage() {
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Assistant</h1>
-          <p className="mt-1 text-base text-zinc-500">
+          <p className="mt-1 text-base text-[var(--text-muted)]">
             Ask in plain English. A planner picks one specialist — or the whole team — which calls real
             tools against your data — every call is shown with its answer.
           </p>
@@ -156,7 +156,7 @@ export default function AssistantPage() {
         {turns.length > 0 && (
           <button
             onClick={() => setTurns([])}
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            className="rounded-lg border border-[var(--border-strong)] px-3 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-page)] dark:hover:bg-zinc-800"
           >
             Clear conversation
           </button>
@@ -165,12 +165,12 @@ export default function AssistantPage() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* ---------------- conversation ---------------- */}
-        <div className="flex h-[calc(100vh-250px)] min-h-[540px] flex-col rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex h-[calc(100vh-250px)] min-h-[540px] flex-col rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)]">
           <div className="flex-1 space-y-4 overflow-y-auto p-6">
             {turns.length === 0 && (
               <div className="py-12 text-center">
                 <p className="text-lg font-medium">What would you like to know?</p>
-                <p className="mt-1.5 text-sm text-zinc-500">
+                <p className="mt-1.5 text-sm text-[var(--text-muted)]">
                   The planner decides which agent handles it — you don&apos;t have to choose.
                 </p>
                 <div className="mx-auto mt-6 flex max-w-2xl flex-wrap justify-center gap-2">
@@ -178,7 +178,7 @@ export default function AssistantPage() {
                     <button
                       key={ex}
                       onClick={() => submit(ex)}
-                      className="rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                      className="rounded-full border border-[var(--border-strong)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] dark:hover:bg-zinc-800"
                     >
                       {ex}
                     </button>
@@ -190,7 +190,7 @@ export default function AssistantPage() {
             {turns.map((turn, i) =>
               turn.role === "user" ? (
                 <div key={i} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-zinc-900 px-4 py-3 text-base text-white dark:bg-white dark:text-zinc-900">
+                  <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-zinc-900 px-4 py-3 text-base text-white dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]">
                     {turn.text}
                   </div>
                 </div>
@@ -200,20 +200,20 @@ export default function AssistantPage() {
                     className={`max-w-[88%] rounded-2xl rounded-bl-sm border px-4 py-3 ${
                       turn.error
                         ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
-                        : "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50"
+                        : "border-[var(--border-subtle)] bg-[var(--surface-page)]/50"
                     }`}
                   >
                     {turn.answer && (
                       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="rounded bg-zinc-900 px-2 py-0.5 text-white dark:bg-white dark:text-zinc-900">
+                        <span className="rounded bg-zinc-900 px-2 py-0.5 text-white dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]">
                           {turn.answer.agent}
                         </span>
                         {turn.answer.routing_reason ? (
-                          <span className="text-zinc-500">
+                          <span className="text-[var(--text-muted)]">
                             planner chose this — {turn.answer.routing_reason}
                           </span>
                         ) : (
-                          <span className="text-zinc-400">(agent forced)</span>
+                          <span className="text-[var(--text-muted)]">(agent forced)</span>
                         )}
                       </div>
                     )}
@@ -232,7 +232,7 @@ export default function AssistantPage() {
                       // remark-gfm is what makes tables and strikethrough work; plain
                       // react-markdown only handles CommonMark, which has no table syntax —
                       // and tables are most of what these answers use.
-                      <div className="prose-chat text-base leading-relaxed text-zinc-800 dark:text-zinc-200">
+                      <div className="prose-chat text-base leading-relaxed text-[var(--text-primary)]">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={{
@@ -256,13 +256,13 @@ export default function AssistantPage() {
                             th: ({ ...props }) => (
                               <th
                                 {...props}
-                                className="border-b border-zinc-300 px-2 py-1.5 text-left font-medium dark:border-zinc-700"
+                                className="border-b border-[var(--border-strong)] px-2 py-1.5 text-left font-medium"
                               />
                             ),
                             td: ({ ...props }) => (
                               <td
                                 {...props}
-                                className="border-b border-zinc-100 px-2 py-1.5 align-top dark:border-zinc-800"
+                                className="border-b border-[var(--border-subtle)] px-2 py-1.5 align-top"
                               />
                             ),
                             h2: ({ ...props }) => (
@@ -281,11 +281,11 @@ export default function AssistantPage() {
                             code: ({ ...props }) => (
                               <code
                                 {...props}
-                                className="rounded bg-zinc-100 px-1 py-0.5 text-[13px] dark:bg-zinc-800"
+                                className="rounded bg-[var(--surface-sunken)] px-1 py-0.5 text-[13px]"
                               />
                             ),
                             hr: () => (
-                              <hr className="my-4 border-zinc-200 dark:border-zinc-800" />
+                              <hr className="my-4 border-[var(--border-subtle)]" />
                             ),
                           }}
                         >
@@ -334,10 +334,10 @@ export default function AssistantPage() {
                     )}
 
                     {turn.answer && turn.answer.tool_calls.length > 0 && (
-                      <div className="mt-3 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+                      <div className="mt-3 border-t border-[var(--border-subtle)] pt-2">
                         <button
                           onClick={() => setExpandedTools(expandedTools === i ? null : i)}
-                          className="text-xs text-zinc-500 underline decoration-dotted"
+                          className="text-xs text-[var(--text-muted)] underline decoration-dotted"
                         >
                           {expandedTools === i ? "Hide" : "Show"} {turn.answer.tool_calls.length}{" "}
                           tool call{turn.answer.tool_calls.length === 1 ? "" : "s"} ·{" "}
@@ -354,11 +354,11 @@ export default function AssistantPage() {
                         {expandedTools === i && (
                           <ol className="mt-2 space-y-2">
                             {turn.answer.tool_calls.map((tc, j) => (
-                              <li key={j} className="border-l-2 border-zinc-300 pl-2 dark:border-zinc-600">
-                                <div className="font-mono text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                              <li key={j} className="border-l-2 border-[var(--border-strong)] pl-2">
+                                <div className="font-mono text-xs font-medium text-[var(--text-secondary)]">
                                   {tc.tool}({JSON.stringify(tc.arguments)})
                                 </div>
-                                <pre className="mt-0.5 max-h-28 overflow-auto whitespace-pre-wrap break-all text-[11px] text-zinc-500">
+                                <pre className="mt-0.5 max-h-28 overflow-auto whitespace-pre-wrap break-all text-[11px] text-[var(--text-muted)]">
                                   {tc.result_preview}
                                 </pre>
                               </li>
@@ -374,7 +374,7 @@ export default function AssistantPage() {
 
             {loading && (
               <div className="flex justify-start">
-                <div className="rounded-2xl rounded-bl-sm border border-zinc-200 bg-zinc-50 px-4 py-3 text-base text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/50">
+                <div className="rounded-2xl rounded-bl-sm border border-[var(--border-subtle)] bg-[var(--surface-page)] px-4 py-3 text-base text-[var(--text-muted)]/50">
                   Thinking…
                 </div>
               </div>
@@ -384,7 +384,7 @@ export default function AssistantPage() {
           </div>
 
           {/* ---------------- composer ---------------- */}
-          <div className="border-t border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="border-t border-[var(--border-subtle)] p-4">
             <div className="flex items-end gap-2">
               <textarea
                 value={message}
@@ -392,18 +392,18 @@ export default function AssistantPage() {
                 onKeyDown={onKeyDown}
                 rows={2}
                 placeholder="Ask anything…   (Enter to send · Shift+Enter for a new line)"
-                className="flex-1 resize-none rounded-lg border border-zinc-300 px-4 py-3 text-base outline-none focus:border-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:focus:border-zinc-100"
+                className="flex-1 resize-none rounded-lg border border-[var(--border-strong)] px-4 py-3 text-base outline-none focus:border-zinc-900 dark:focus:border-[var(--border-subtle)]"
               />
               <button
                 onClick={() => submit(message)}
                 disabled={loading || !message.trim()}
-                className="rounded-lg bg-zinc-900 px-5 py-3 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-zinc-900"
+                className="rounded-lg bg-zinc-900 px-5 py-3 text-base font-medium text-white disabled:opacity-40 dark:bg-[var(--surface-card)] dark:text-[var(--text-primary)]"
               >
                 Send
               </button>
             </div>
 
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]">
               <label className="flex cursor-pointer items-center gap-1.5">
                 <input
                   type="checkbox"
@@ -411,7 +411,7 @@ export default function AssistantPage() {
                   onChange={(e) => setTeamMode(e.target.checked)}
                 />
                 <span title="The orchestrator delegates to several specialists and combines their answers. Slower and costlier, but handles questions one agent can't.">
-                  Use the whole team <span className="text-zinc-400">(multi-agent)</span>
+                  Use the whole team <span className="text-[var(--text-muted)]">(multi-agent)</span>
                 </span>
               </label>
 
@@ -424,7 +424,7 @@ export default function AssistantPage() {
                   <select
                     value={agent}
                     onChange={(e) => setAgent(e.target.value)}
-                    className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800"
+                    className="rounded border border-[var(--border-strong)] px-2 py-1 text-xs"
                   >
                     <option value="">Auto (planner decides)</option>
                     {Object.keys(agents).map((name) => (
@@ -449,11 +449,11 @@ export default function AssistantPage() {
         </div>
 
         {/* ---------------- sidebar ---------------- */}
-        <aside className="flex h-[calc(100vh-250px)] min-h-[540px] flex-col overflow-y-auto rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="mb-2 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+        <aside className="flex h-[calc(100vh-250px)] min-h-[540px] flex-col overflow-y-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-5">
+          <h3 className="mb-2 text-sm font-semibold text-[var(--text-secondary)]">
             How a question is handled
           </h3>
-          <ol className="mb-6 space-y-1.5 text-xs leading-relaxed text-zinc-500">
+          <ol className="mb-6 space-y-1.5 text-xs leading-relaxed text-[var(--text-muted)]">
             <li>
               1. A <strong>planner</strong> reads your question and picks the cheapest mode
               that can answer it — <strong>one specialist</strong>, or <strong>the team</strong>
@@ -464,19 +464,19 @@ export default function AssistantPage() {
             <li>4. Repeat until it answers — every call shown with the reply</li>
           </ol>
 
-          <h3 className="mb-3 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+          <h3 className="mb-3 text-sm font-semibold text-[var(--text-secondary)]">
             Agents &amp; permissions
           </h3>
           <ul className="space-y-3">
             {Object.entries(agents).map(([name, cfg]) => (
-              <li key={name} className="border-b border-zinc-100 pb-3 last:border-0 dark:border-zinc-800">
-                <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{name}</div>
-                <div className="text-xs text-zinc-500">{cfg.description}</div>
+              <li key={name} className="border-b border-[var(--border-subtle)] pb-3 last:border-0">
+                <div className="text-sm font-medium text-[var(--text-primary)]">{name}</div>
+                <div className="text-xs text-[var(--text-muted)]">{cfg.description}</div>
 
                 {AGENT_EXAMPLES[name] && (
                   <button
                     onClick={() => submit(AGENT_EXAMPLES[name])}
-                    className="mt-2 block w-full rounded border border-zinc-200 px-2 py-1.5 text-left text-xs italic text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    className="mt-2 block w-full rounded border border-[var(--border-subtle)] px-2 py-1.5 text-left text-xs italic text-[var(--text-secondary)] hover:bg-[var(--surface-page)] dark:hover:bg-zinc-800"
                     title="Ask this — the planner should route it here"
                   >
                     &ldquo;{AGENT_EXAMPLES[name]}&rdquo;
@@ -487,7 +487,7 @@ export default function AssistantPage() {
                   {cfg.tools.map((t) => (
                     <span
                       key={t}
-                      className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                      className="rounded bg-[var(--surface-sunken)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-secondary)]"
                     >
                       {t}
                     </span>
@@ -497,7 +497,7 @@ export default function AssistantPage() {
             ))}
           </ul>
 
-          <p className="mt-4 text-xs leading-relaxed text-zinc-400">
+          <p className="mt-4 text-xs leading-relaxed text-[var(--text-muted)]">
             Each agent can only call the tools listed. The email agent literally cannot touch
             your resume — it was never given that tool.
           </p>

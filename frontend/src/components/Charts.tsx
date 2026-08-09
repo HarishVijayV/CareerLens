@@ -43,16 +43,16 @@ export function ChartFrame({
   const [showTable, setShowTable] = useState(false);
 
   return (
-    <section className="viz-root rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+    <section className="viz-root rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-5">
       <header className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
-          {subtitle && <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>}
+          <h3 className="text-base font-semibold text-[var(--text-primary)]">{title}</h3>
+          {subtitle && <p className="mt-1 text-sm text-[var(--text-muted)]">{subtitle}</p>}
         </div>
         {rows && columns && (
           <button
             onClick={() => setShowTable((v) => !v)}
-            className="shrink-0 rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            className="shrink-0 rounded border border-[var(--border-strong)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-page)] dark:hover:bg-zinc-800"
           >
             {showTable ? "Chart" : "Table"}
           </button>
@@ -63,9 +63,9 @@ export function ChartFrame({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm tabular-nums">
             <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800">
+              <tr className="border-b border-[var(--border-subtle)]">
                 {columns.map((c) => (
-                  <th key={c} className="py-2 pr-4 font-medium text-zinc-500">
+                  <th key={c} className="py-2 pr-4 font-medium text-[var(--text-muted)]">
                     {c}
                   </th>
                 ))}
@@ -73,9 +73,9 @@ export function ChartFrame({
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={i} className="border-b border-zinc-100 last:border-0 dark:border-zinc-800/60">
+                <tr key={i} className="border-b border-[var(--border-subtle)] last:border-0/60">
                   {r.map((cell, j) => (
-                    <td key={j} className="py-2 pr-4 text-zinc-700 dark:text-zinc-300">
+                    <td key={j} className="py-2 pr-4 text-[var(--text-secondary)]">
                       {cell ?? "—"}
                     </td>
                   ))}
@@ -89,7 +89,7 @@ export function ChartFrame({
       )}
 
       {note && !showTable && (
-        <p className="mt-3 border-t border-zinc-100 pt-2.5 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800">
+        <p className="mt-3 border-t border-[var(--border-subtle)] pt-2.5 text-xs leading-relaxed text-[var(--text-muted)]">
           {note}
         </p>
       )}
@@ -111,7 +111,7 @@ export function BarChart({
   const [hover, setHover] = useState<number | null>(null);
 
   if (!data.length) {
-    return <p className="py-12 text-center text-xs text-zinc-500">No data yet.</p>;
+    return <p className="py-12 text-center text-xs text-[var(--text-muted)]">No data yet.</p>;
   }
 
   // The `1` floor keeps this safe when every value is 0 — dividing by a zero max would
@@ -170,7 +170,7 @@ export function BarChart({
               >
                 {d.label}
               </text>
-              <path d={path} className="fill-[#2a78d6] dark:fill-[#3987e5]" opacity={hover === null || hover === i ? 1 : 0.45} />
+              <path d={path} fill="var(--chart-neutral)" opacity={hover === null || hover === i ? 1 : 0.4} />
               <text
                 x={labelWidth + w + 8}
                 y={y + height / 2}
@@ -203,7 +203,7 @@ export function LineChart({
   // Charts render before their fetch resolves, so an empty array is a NORMAL state, not
   // an error — and it must be handled before any scale math runs.
   if (!data.length) {
-    return <p className="py-12 text-center text-xs text-zinc-500">No data yet.</p>;
+    return <p className="py-12 text-center text-xs text-[var(--text-muted)]">No data yet.</p>;
   }
 
   const width = 560;
@@ -250,7 +250,7 @@ export function LineChart({
               x2={width - padding.right}
               y1={y(t)}
               y2={y(t)}
-              className="stroke-zinc-200 dark:stroke-zinc-800"
+              stroke="var(--chart-grid)"
               strokeWidth={1}
             />
             <text
@@ -266,7 +266,7 @@ export function LineChart({
           </g>
         ))}
 
-        <path d={linePath} fill="none" className="stroke-[#2a78d6] dark:stroke-[#3987e5]" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={linePath} fill="none" stroke="var(--chart-positive)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
 
         {data.map((d, i) => (
           <g key={d.label}>
@@ -298,7 +298,7 @@ export function LineChart({
                   strokeWidth={1}
                 />
                 {/* 2px surface ring keeps the marker legible over the line it sits on */}
-                <circle cx={x(i)} cy={y(d.value)} r={5} className="fill-[#2a78d6] dark:fill-[#3987e5] stroke-white dark:stroke-zinc-900" strokeWidth={2} />
+                <circle cx={x(i)} cy={y(d.value)} r={5} fill="var(--chart-positive)" stroke="var(--surface-card)" strokeWidth={2} />
               </>
             )}
           </g>
@@ -307,12 +307,12 @@ export function LineChart({
 
       {hover !== null && (
         <div
-          className="pointer-events-none absolute rounded border border-zinc-200 bg-white px-2 py-1 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-800"
+          className="pointer-events-none absolute rounded border border-[var(--border-subtle)] bg-[var(--surface-card)] px-2 py-1 text-xs shadow-sm"
           style={{ left: `${(x(hover) / width) * 100}%`, top: 0, transform: "translateX(-50%)" }}
           key={id}
         >
-          <div className="font-medium text-zinc-900 dark:text-zinc-100">{data[hover].label}</div>
-          <div className="tabular-nums text-zinc-600 dark:text-zinc-400">
+          <div className="font-medium text-[var(--text-primary)]">{data[hover].label}</div>
+          <div className="tabular-nums text-[var(--text-secondary)]">
             {format(data[hover].value)}
           </div>
         </div>
@@ -332,10 +332,10 @@ export function StatTile({
   hint?: string;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="text-sm font-medium text-zinc-500">{label}</div>
-      <div className="mt-1 text-3xl font-semibold text-zinc-900 dark:text-zinc-50">{value}</div>
-      {hint && <div className="mt-1 text-xs text-zinc-400">{hint}</div>}
+    <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] p-4">
+      <div className="text-sm font-medium text-[var(--text-muted)]">{label}</div>
+      <div className="mt-1 text-3xl font-semibold text-[var(--text-primary)]">{value}</div>
+      {hint && <div className="mt-1 text-xs text-[var(--text-muted)]">{hint}</div>}
     </div>
   );
 }
@@ -373,7 +373,7 @@ export function DivergingBar({
   const [hover, setHover] = useState<number | null>(null);
 
   if (!data.length) {
-    return <p className="py-12 text-center text-xs text-zinc-500">No data yet.</p>;
+    return <p className="py-12 text-center text-xs text-[var(--text-muted)]">No data yet.</p>;
   }
 
   const labelWidth = 108;
@@ -436,8 +436,8 @@ export function DivergingBar({
                 d={path}
                 className={
                   positive
-                    ? "fill-[#2a78d6] dark:fill-[#3987e5]"
-                    : "fill-[#e34948] dark:fill-[#e66767]"
+                    ? "fill-[var(--chart-positive)]"
+                    : "fill-[var(--chart-negative)]"
                 }
                 opacity={hover === null || hover === i ? 1 : 0.45}
               />
@@ -471,7 +471,7 @@ export function DivergingBar({
         />
       </svg>
 
-      <p className="mt-2 text-center text-[11px] text-zinc-400">
+      <p className="mt-2 text-center text-[11px] text-[var(--text-muted)]">
         ← below the overall average · above →
       </p>
     </div>

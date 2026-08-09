@@ -107,7 +107,7 @@ export default function NotificationBell() {
         aria-label={unread ? `${unread} unread notifications` : "Notifications"}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="relative flex h-9 w-9 items-center justify-center rounded-full text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-secondary)] transition hover:bg-[var(--surface-sunken)] dark:hover:bg-zinc-800"
       >
         {/* Inline SVG, consistent with the charts — no icon library for one glyph. */}
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -122,13 +122,13 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-30 mt-2 w-96 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-          <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
+        <div className="absolute right-0 z-30 mt-2 w-96 overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] shadow-lg">
+          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-2.5">
             <span className="text-sm font-medium">Notifications</span>
             {unread > 0 && (
               <button
                 onClick={markAllRead}
-                className="text-xs text-zinc-500 underline-offset-2 hover:underline"
+                className="text-xs text-[var(--text-muted)] underline-offset-2 hover:underline"
               >
                 Mark all read
               </button>
@@ -136,12 +136,12 @@ export default function NotificationBell() {
           </div>
 
           <div className="max-h-96 overflow-y-auto">
-            {loading && <p className="px-4 py-6 text-center text-xs text-zinc-500">Loading…</p>}
+            {loading && <p className="px-4 py-6 text-center text-xs text-[var(--text-muted)]">Loading…</p>}
 
             {!loading && items.length === 0 && (
               <div className="px-4 py-8 text-center">
-                <p className="text-sm text-zinc-500">Nothing yet.</p>
-                <p className="mt-1 text-xs text-zinc-400">
+                <p className="text-sm text-[var(--text-muted)]">Nothing yet.</p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">
                   New job matches appear here after the pipeline runs.
                 </p>
               </div>
@@ -151,7 +151,7 @@ export default function NotificationBell() {
               <button
                 key={n.id}
                 onClick={() => openItem(n)}
-                className={`block w-full border-b border-zinc-100 px-4 py-3 text-left transition last:border-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50 ${
+                className={`block w-full border-b border-[var(--border-subtle)] px-4 py-3 text-left transition last:border-0 hover:bg-[var(--surface-page)] dark:hover:bg-zinc-800/50 ${
                   n.read ? "" : "bg-blue-50/50 dark:bg-blue-950/20"
                 }`}
               >
@@ -160,13 +160,13 @@ export default function NotificationBell() {
                     <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
                   )}
                   <div className={n.read ? "pl-3.5" : ""}>
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    <p className="text-sm font-medium text-[var(--text-primary)]">
                       {n.title}
                     </p>
                     {n.body && (
-                      <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">{n.body}</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-[var(--text-muted)]">{n.body}</p>
                     )}
-                    <p className="mt-1 text-[11px] text-zinc-400">
+                    <p className="mt-1 text-[11px] text-[var(--text-muted)]">
                       {new Date(n.created_at).toLocaleString()}
                       {n.link && " · opens the posting"}
                     </p>

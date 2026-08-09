@@ -39,7 +39,7 @@ export default function SignupPage() {
       footer={
         <>
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-zinc-900 underline dark:text-zinc-100">
+          <Link href="/login" className="font-medium text-[var(--text-primary)] underline">
             Sign in
           </Link>
         </>
@@ -82,7 +82,7 @@ export default function SignupPage() {
               learn by failing is a bad rule. */}
           <p
             id="password-hint"
-            className={`mt-1.5 text-xs ${tooShort ? "text-red-600" : "text-zinc-500"}`}
+            className={`mt-1.5 text-xs ${tooShort ? "text-red-600" : "text-[var(--text-muted)]"}`}
           >
             {tooShort
               ? `${MIN_PASSWORD_LENGTH - password.length} more character${
