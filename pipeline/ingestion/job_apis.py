@@ -143,6 +143,43 @@ def to_usd(salary, source: str):
     return value
 
 
+_REMOTE_PATTERN = re.compile(
+    r"\b(remote|work[- ]from[- ]home|wfh|telecommut\w*|fully[- ]distributed)\b", re.I
+)
+
+
+def _is_remote(source: str, title: str | None, description: str | None) -> bool:
+    """Whether a posting is remote.
+
+    This used to be `source == "remotive"`, which is true of exactly one source — so with
+    Adzuna supplying almost every posting, the warehouse reported 5 remote roles out of
+    4,907 and the dashboard showed "0.1% remote". That is not a fact about the job market,
+    it is a fact about which API the row came from.
+
+    Adzuna has no remote flag, but says so in the title or the description when a role is
+    remote, so match on the text. Imperfect — a description mentioning "remote team" will
+    false-positive — but wrong in a way that is far smaller than reporting 0.1%.
+    """
+    if source == "remotive":
+        return True
+    return bool(_REMOTE_PATTERN.search(f"{title or ''} {description or ''}"))
+
+
+def _month_from_iso(created: str | None) -> int | None:
+    """Adzuna returns `created` as an ISO timestamp; the warehouse wants a month number.
+
+    Dropping it meant every real posting had posted_month NULL, so the hiring-seasonality
+    chart had nothing to draw once the charts were restricted to real data — it rendered
+    "No data yet" while the information was sitting unparsed in the API response.
+    """
+    if not created:
+        return None
+    try:
+        return int(created[5:7])
+    except (ValueError, IndexError):
+        return None
+
+
 def _normalize(
     posting_id: str,
     title: str | None,
@@ -154,6 +191,7 @@ def _normalize(
     description: str,
     source: str,
     url: str | None = None,
+    posted_month: int | None = None,
 ) -> dict:
     """Every source has its own field names — normalizing at the EDGE means the Spark ETL
     downstream sees one consistent shape and doesn't need per-source branching. Doing
@@ -180,7 +218,7 @@ def _normalize(
         "location": location,
         "region": region,
         "seniority": _infer_seniority(title, description),
-        "remote": source == "remotive",
+        "remote": _is_remote(source, title, description),
         "salary": to_usd(salary, source),
         "salary_currency_original": _NATIVE_CURRENCY.get(source, "USD"),
         "required_skills": text_skills,
@@ -188,7 +226,7 @@ def _normalize(
         "source": source,
         "is_real": True,
         "url": url,
-        "posted_month": None,
+        "posted_month": posted_month,
     }
 
 
@@ -286,6 +324,7 @@ def fetch_remotive(terms: list[str]) -> list[dict]:
                 description=j.get("description", ""),
                 source="remotive",
                 url=j.get("url"),
+                posted_month=_month_from_iso(j.get("publication_date")),
             )
             for j in jobs
         )
@@ -336,6 +375,10 @@ def fetch_adzuna(terms: list[str], countries: list[str], app_id: str, app_key: s
                         description=j.get("description", ""),
                         source=f"adzuna_{country}",
                         url=j.get("redirect_url"),
+                        # Adzuna's `created` is an ISO timestamp; the warehouse wants the
+                        # month. Dropping it left every real posting with posted_month NULL,
+                        # so the seasonality chart had nothing to draw.
+                        posted_month=_month_from_iso(j.get("created")),
                     )
                     for j in jobs
                 )

@@ -442,14 +442,19 @@ export function DivergingBar({
                 opacity={hover === null || hover === i ? 1 : 0.45}
               />
 
-              {/* Direct label on every bar, outside the mark. This is the secondary
-                  encoding that keeps the sign readable without color. */}
+              {/* Values live in a FIXED COLUMN on the right, not beside each bar.
+                  Placed next to the mark, a long negative bar pushes its label left until
+                  it collides with the category name — "Hadoop-$41,031" ran together on
+                  screen. A dedicated column cannot collide with anything and makes the
+                  numbers scannable down a line, which is what a reader does with them
+                  anyway. This is still the secondary encoding that keeps the sign readable
+                  without relying on colour. */}
               <text
-                x={positive ? x + w + 7 : x - 7}
+                x={labelWidth + plotWidth + 66}
                 y={y + height / 2}
-                textAnchor={positive ? "start" : "end"}
+                textAnchor="end"
                 dominantBaseline="central"
-                className="fill-zinc-500"
+                fill="var(--text-secondary)"
                 style={{ fontSize: 12, fontVariantNumeric: "tabular-nums" }}
               >
                 {d.value >= 0 ? "+" : "−"}
