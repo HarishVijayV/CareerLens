@@ -579,6 +579,47 @@ in plain English, what it *can* do, what we actually made it do, and the real co
 
 ---
 
+### What costs money, and what is just switched off
+
+These get confused constantly, so it is worth separating them. **Almost everything here is
+free.** Two tools are off on a laptop for RAM reasons, not cost reasons, and exactly one
+thing has a bill attached.
+
+| Tool | Cost | Running now? | Why |
+|---|---|---|---|
+| PySpark, Hadoop, dbt, Postgres, Redis, Parquet | **free** | yes | open source, runs locally |
+| **Airflow** | **free** | **no** | ~600MB RAM. Behind the `bigdata` compose profile. |
+| **Kafka** | **free** | **no** | ~600MB RAM. Same profile. |
+| **Snowflake** | **paid** | **no** | $400 trial for 30 days, then it stops |
+| Fireworks (LLM) | pay per call | yes | cheap; a question costs a fraction of a cent |
+| Adzuna | free tier | yes | daily quota, plenty for one run a day |
+
+Turn the two free ones on whenever you want them:
+
+```bash
+docker compose --profile bigdata up -d      # Airflow UI on :8081, Kafka on :9092
+```
+
+**Snowflake expiring costs you nothing**, and that is the point of writing transformations
+in dbt: the same models target Postgres by changing one line, and `run_pipeline.py`
+auto-detects which to use. Nothing in the repo breaks when the trial ends.
+
+**Do not say "we use Kafka and Airflow" in an interview** while they are switched off. Say
+"the producer and the DAG are written and run when the profile is up" — which is true, and
+which nobody can catch you out on.
+
+### The other containers on your machine
+
+If you have ever run the Kubernetes demo, `docker ps` shows three extra containers named
+`careerlens-control-plane`, `careerlens-worker` and `careerlens-worker2`, using around
+3GB. Those are **kind** — a practice Kubernetes cluster, completely separate from the app.
+The nine containers in the `infra` group are the whole application; the kind ones can be
+deleted whenever you are not practising Kubernetes:
+
+```bash
+kind delete cluster --name careerlens
+```
+
 ### PySpark — the one that does the actual work
 
 **What it is, simply.** Normal Python reads a file one row at a time in one process. Spark
