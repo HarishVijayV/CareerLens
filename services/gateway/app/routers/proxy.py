@@ -22,7 +22,10 @@ _SERVICE_MAP = {
     "agents": (settings.agent_service_url, "/agents"),
     "jobs": (settings.jobs_service_url, "/jobs"),
     "analytics": (settings.jobs_service_url, "/analytics"),
-    "notifications": (settings.notification_service_url, "/notifications"),
+    # auth-service, not notification-service: these are per-user rows in the same
+    # database as identity. notification-service remains the OUTBOUND side (email/SMS
+    # providers), which is a genuinely different concern with a different failure mode.
+    "notifications": (settings.auth_service_url, "/notifications"),
 }
 
 # Hop-by-hop headers describe a single connection and must not be relayed to the next

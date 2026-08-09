@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import (Boolean, DateTime, ForeignKey, Integer, LargeBinary, String,
+                        Text, UniqueConstraint)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -226,3 +227,35 @@ class ApplicationEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     application: Mapped["Application"] = relationship(back_populates="events")
+
+
+class Notification(Base):
+    """An in-app alert, shown under the bell in the top bar.
+
+    In-app rather than email, deliberately. The Kafka consumer fires once per matching
+    posting, so an email-per-match sends 200 emails on a night the pipeline finds 200 jobs
+    — a demo that would get itself marked as spam. A bell that shows "12 new" is the same
+    information at a glance, needs no SMTP provider, and is visible in the product rather
+    than in someone's inbox.
+
+    posting_id is UNIQUE per user: re-running the pipeline republishes events for postings
+    already seen, and the database is the right place to enforce "tell them once", not the
+    consumer's memory — which resets every time it restarts.
+    """
+
+    __tablename__ = "notifications"
+    __table_args__ = (UniqueConstraint("user_id", "posting_id", name="uq_notification_user_posting"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+
+    kind: Mapped[str] = mapped_column(String, default="job_match")
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Where clicking it should go, e.g. the posting's apply URL.
+    link: Mapped[str | None] = mapped_column(Text, nullable=True)
+    posting_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError, User } from "@/lib/api";
+import NotificationBell from "@/components/NotificationBell";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard" },
@@ -163,6 +164,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
 
+          <div className="flex items-center gap-1">
+          {/* Bell sits immediately left of the avatar — the conventional place, and where
+              people look for it without being told. */}
+          <NotificationBell />
+
           {/* account menu — an avatar rather than a raw email string, which was both
               cluttered and leaked the address to anyone glancing at the screen */}
           <div className="relative" ref={menuRef}>
@@ -209,6 +215,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
             )}
+          </div>
           </div>
         </div>
 

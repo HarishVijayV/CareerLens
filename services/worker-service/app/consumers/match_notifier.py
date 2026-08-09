@@ -31,7 +31,7 @@ KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql+psycopg://careerlens:change_me@postgres:5432/careerlens"
 )
-NOTIFICATION_URL = os.getenv("NOTIFICATION_SERVICE_URL", "http://notification-service:8000")
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
 
 TOPIC = "posting.discovered"
 GROUP_ID = "match-notifier"
@@ -75,22 +75,47 @@ def _matches(profile: dict, posting: dict) -> tuple[bool, list[str]]:
 
 
 def _notify(profile: dict, posting: dict, overlap: list[str]) -> None:
+    """Create an in-app notification — the bell in the top bar, not an email.
+
+    Email was the obvious first choice and the wrong one. This consumer fires once per
+    matching posting, so a night where the pipeline finds 200 relevant jobs sends 200
+    separate emails: the same information, delivered in the most annoying possible way,
+    and a fast route to being marked as spam.
+
+    A bell showing "12 new" carries the same content at a glance, needs no SMTP provider
+    or deliverability setup, and is visible inside the product rather than in an inbox the
+    user may never open. notification-service still exists for genuinely outbound
+    channels; it just isn't the right one for this event.
+
+    Deduplication lives in the database (unique on user_id + posting_id), not here. A
+    consumer restarts and forgets; the constraint does not.
+    """
+    matched = ", ".join(overlap) or "(matched on role title)"
     body = (
-        f"New posting matching your profile:\n\n"
-        f"{posting.get('title')} at {posting.get('company')}\n"
-        f"Region: {posting.get('region')}\n"
-        f"Matching skills: {', '.join(overlap) or '(role title match)'}\n"
+        f"{posting.get('title')} at {posting.get('company')}"
+        f" · {posting.get('region')}"
+        f" · Matching skills: {matched}"
     )
     try:
         httpx.post(
-            f"{NOTIFICATION_URL}/notifications/email",
-            json={"to": profile["email"], "subject": f"Job match: {posting.get('title')}", "body": body},
+            f"{AUTH_SERVICE_URL}/notifications/internal",
+            json={
+                "user_id": profile["user_id"],
+                "title": f"New match: {posting.get('title')}",
+                "body": body,
+                "link": posting.get("url"),
+                "posting_id": posting.get("posting_id"),
+                "kind": "job_match",
+            },
+            # The gateway strips this header from anything a browser sends, so it can only
+            # be set by something already inside the cluster.
+            headers={"X-Internal-Call": "match-notifier"},
             timeout=10.0,
         )
     except httpx.HTTPError as exc:
-        # A failed notification must not crash the consumer or block the offset commit
-        # for everyone else — log it and move on.
-        logger.warning("notify failed for %s: %s", profile["email"], exc)
+        # A failed notification must not crash the consumer or block the offset commit for
+        # everyone else - log it and move on.
+        logger.warning("notify failed for user %s: %s", profile.get("user_id"), exc)
 
 
 def main() -> None:

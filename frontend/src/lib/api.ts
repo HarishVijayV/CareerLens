@@ -97,6 +97,17 @@ export interface User {
   role: string;
 }
 
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  posting_id: string | null;
+  read: boolean;
+  created_at: string;
+}
+
 export interface Profile {
   user_id: string;
   full_name: string | null;
@@ -230,6 +241,13 @@ export const api = {
   me: () => request<User>("/auth/me"),
 
   // ---- profile ----
+  // ---- notifications (the bell) ----
+  listNotifications: () => request<AppNotification[]>("/notifications?limit=30"),
+  unreadCount: () => request<{ unread: number }>("/notifications/unread-count"),
+  markAllRead: () => request<{ marked_read: number }>("/notifications/read-all", { method: "POST" }),
+  markRead: (id: string) =>
+    request<AppNotification>(`/notifications/${id}/read`, { method: "POST" }),
+
   getProfile: () => request<Profile>("/profile"),
   /** Read the active resume and return the profile fields it implies. Returns a
    *  SUGGESTION — the caller shows it for review; nothing is saved until the user saves. */
