@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { BarChart, ChartFrame, DivergingBar, LineChart, StatTile } from "@/components/Charts";
+import { BarChart, ChartFrame, DivergingBar, LineChart, Lollipop, StatTile } from "@/components/Charts";
 import { api } from "@/lib/api";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -125,8 +125,12 @@ export default function AnalyticsPage() {
           columns={["Seniority", "Avg salary"]}
           rows={bySeniority.map((s) => [s.seniority, money(s.avg_salary)])}
         >
-          <BarChart
+          {/* Lollipop, not a bar: three categories do not need three large blocks, and the
+              reference line answers "compared to what?" — which is the actual question. */}
+          <Lollipop
             data={bySeniority.map((s) => ({ label: s.seniority, value: s.avg_salary }))}
+            reference={overview?.avg_salary}
+            referenceLabel="overall avg"
             format={money}
           />
         </ChartFrame>
@@ -136,8 +140,10 @@ export default function AnalyticsPage() {
           columns={["Region", "Avg salary"]}
           rows={byRegion.map((r) => [r.region, money(r.avg_salary)])}
         >
-          <BarChart
+          <Lollipop
             data={byRegion.map((r) => ({ label: r.region, value: r.avg_salary }))}
+            reference={overview?.avg_salary}
+            referenceLabel="overall avg"
             format={money}
           />
         </ChartFrame>

@@ -477,3 +477,149 @@ export function DivergingBar({
     </div>
   );
 }
+
+/**
+ * LOLLIPOP with a reference line — for few categories compared against a benchmark.
+ *
+ * Two problems with using a bar here, both real:
+ *
+ * A bar is a large block, and the viz guidance is explicit that saturated fills belong on
+ * small marks and accents rather than large areas — which is exactly why the all-bar
+ * dashboard read as heavy. A lollipop carries the same value with a hairline stem and a
+ * small dot, so the accent hue can stay saturated and still be comfortable. Same data,
+ * a fraction of the ink.
+ *
+ * More importantly a bare bar answers "how much?" and stops. Adding the overall average as
+ * a reference line answers "compared to what?", which is the question anyone actually has
+ * — and it turns each row into above-or-below at a glance instead of a length to compare
+ * by eye against its neighbours.
+ */
+export function Lollipop({
+  data,
+  reference,
+  referenceLabel = "average",
+  format = (v: number) => v.toLocaleString(),
+}: {
+  data: { label: string; value: number }[];
+  reference?: number;
+  referenceLabel?: string;
+  format?: (v: number) => string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+
+  if (!data.length) {
+    return <p className="py-12 text-center text-xs text-[var(--text-muted)]">No data yet.</p>;
+  }
+
+  const labelWidth = 108;
+  const plotWidth = 400;
+  const rowHeight = 34;
+  const dotRadius = 6;
+
+  // Domain starts at zero so stem lengths stay proportional — a truncated axis makes a 5%
+  // difference look like 50%, which is the most common way a chart lies.
+  const max = Math.max(...data.map((d) => d.value), reference ?? 0) * 1.12;
+  const x = (v: number) => labelWidth + (v / Math.max(max, 1)) * plotWidth;
+
+  return (
+    <div className="relative overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${labelWidth + plotWidth + 90} ${data.length * rowHeight + 18}`}
+        className="w-full"
+        style={{ minWidth: 420 }}
+        role="img"
+        aria-label="lollipop chart with reference line"
+      >
+        {reference !== undefined && (
+          <g>
+            {/* Solid hairline, never dashed — dashing adds noise and reads as "provisional". */}
+            <line
+              x1={x(reference)}
+              x2={x(reference)}
+              y1={0}
+              y2={data.length * rowHeight}
+              stroke="var(--border-strong)"
+              strokeWidth={1}
+            />
+            <text
+              x={x(reference)}
+              y={data.length * rowHeight + 13}
+              textAnchor="middle"
+              fill="var(--text-muted)"
+              style={{ fontSize: 10.5 }}
+            >
+              {referenceLabel} {format(reference)}
+            </text>
+          </g>
+        )}
+
+        {data.map((d, i) => {
+          const cy = i * rowHeight + rowHeight / 2;
+          const cx = x(d.value);
+          const above = reference !== undefined && d.value >= reference;
+          const active = hover === null || hover === i;
+
+          return (
+            <g
+              key={d.label}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+              style={{ cursor: "default" }}
+            >
+              <rect x={0} y={cy - rowHeight / 2} width={labelWidth + plotWidth + 90} height={rowHeight} fill="transparent" />
+
+              <text
+                x={labelWidth - 10}
+                y={cy}
+                textAnchor="end"
+                dominantBaseline="central"
+                fill="var(--text-secondary)"
+                style={{ fontSize: 12.5 }}
+              >
+                {d.label}
+              </text>
+
+              {/* The stem is context, not data — recessive, so the dot reads as the value. */}
+              <line
+                x1={labelWidth}
+                x2={cx - dotRadius}
+                y1={cy}
+                y2={cy}
+                stroke="var(--chart-neutral-soft)"
+                strokeWidth={1.5}
+                opacity={active ? 1 : 0.4}
+              />
+
+              {/* 2px surface ring so a dot landing on the reference line stays legible. */}
+              <circle
+                cx={cx}
+                cy={cy}
+                r={dotRadius}
+                fill={
+                  reference === undefined
+                    ? "var(--chart-positive)"
+                    : above
+                    ? "var(--chart-positive)"
+                    : "var(--chart-negative)"
+                }
+                stroke="var(--surface-card)"
+                strokeWidth={2}
+                opacity={active ? 1 : 0.45}
+              />
+
+              <text
+                x={cx + dotRadius + 8}
+                y={cy}
+                dominantBaseline="central"
+                fill="var(--text-secondary)"
+                style={{ fontSize: 12.5, fontVariantNumeric: "tabular-nums" }}
+              >
+                {format(d.value)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
