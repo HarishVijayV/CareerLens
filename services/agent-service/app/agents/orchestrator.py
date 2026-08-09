@@ -27,6 +27,7 @@ the question.
 from __future__ import annotations
 
 import json
+import re
 
 from app.agents.base import Agent, AgentRun
 from app.agents.definitions import AGENTS
@@ -179,9 +180,26 @@ def _delegation_tools() -> list[dict]:
     ]
 
 
+def _extract_user_id(message: str) -> str | None:
+    """Pull the `[user_id: ...]` line the router prepends to every request."""
+    match = re.match(r"\[user_id:\s*([^\]]+)\]", message.strip())
+    return match.group(1).strip() if match else None
+
+
 def orchestrate(user_message: str) -> dict:
     """Delegate to one or more sub-agents, then synthesise a single answer."""
     provider = get_llm_provider()
+
+    # The sub-agent gets whatever question the orchestrator WROTE, not the original
+    # message — so the `[user_id: ...]` line the router prepended is only carried through
+    # if the model happens to copy it. Sometimes it did and sometimes it didn't, which is
+    # the worst kind of intermittent: "tailor my resume" reached resume_tailor with no id,
+    # get_resume had nobody to look up, and the agent asked the user to paste a resume it
+    # was perfectly able to fetch.
+    #
+    # Identity is not something to leave to a model's discretion. Re-attached to every
+    # delegation below, in code.
+    user_id = _extract_user_id(user_message)
     catalog = "\n".join(f"- {name}: {AGENTS[name]['description']}" for name in DELEGATABLE)
 
     tools = _delegation_tools()
@@ -263,7 +281,14 @@ def orchestrate(user_message: str) -> dict:
 
             # The nested run. Its own tool calls are surfaced too, so the UI can show the
             # full two-level trace rather than an opaque "the orchestrator did something".
-            sub_run = route_explicit(agent_name, question)
+            #
+            # user_id is re-attached here rather than trusted to be in `question`, so a
+            # sub-agent can always identify whose data to read.
+            sub_question = question
+            if user_id and "[user_id:" not in sub_question:
+                sub_question = f"[user_id: {user_id}]\n{sub_question}"
+
+            sub_run = route_explicit(agent_name, sub_question)
 
             delegations.append(
                 {

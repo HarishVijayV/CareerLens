@@ -100,12 +100,45 @@ def get_profile(user_id: str) -> str:
 
 
 def get_resume(user_id: str) -> str:
-    """Just the resume portion of the profile."""
+    """The user's ACTIVE uploaded resume.
+
+    Reads /resume/active, not the profile. It used to read `profile.resume_text`, which
+    was correct when the only way to supply a resume was pasting it into a profile field.
+    Once uploads landed, resumes moved to the `resume_versions` table and that profile
+    column stopped being written — so this returned an empty resume and the tailor agent
+    politely asked the user to paste the resume they had already uploaded.
+
+    The failure looked like a model problem and was a stale data path. When storage for
+    something moves, every reader of the old location has to move with it; nothing fails
+    loudly because an empty string is a perfectly valid string.
+    """
+    resp = httpx.get(
+        f"{AUTH_SERVICE_URL}/resume/active",
+        headers={"X-User-Id": user_id, "X-Internal-Call": "agent-service"},
+        timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+    active = resp.json()
+
+    if not active.get("exists") or not (active.get("content_text") or "").strip():
+        # Say what to do about it. "No resume" alone invites the model to ask the user to
+        # paste one, which is exactly the loop we are trying to break.
+        return json.dumps(
+            {
+                "has_resume": False,
+                "note": "This user has not uploaded a resume yet. Tell them to upload one "
+                "on the Profile or Resume page. Do NOT ask them to paste it into the chat.",
+            }
+        )
+
     profile = json.loads(get_profile(user_id))
     return json.dumps(
         {
-            "resume_text": profile.get("resume_text"),
-            "resume_latex_present": bool(profile.get("resume_latex")),
+            "has_resume": True,
+            "label": active.get("label"),
+            "source_format": active.get("source_format"),
+            "resume_text": active.get("content_text"),
+            "resume_latex_present": bool(active.get("content_latex")),
             "skills": profile.get("skills"),
             "headline": profile.get("headline"),
         }
