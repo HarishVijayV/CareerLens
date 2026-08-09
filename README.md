@@ -18,11 +18,11 @@ frontend.
 
 | What | Result |
 |---|---|
-| Rows processed | 154,911 → **151,883** after dedup (3,028 duplicates removed) |
-| Of which real | **4,911** live postings from Adzuna (India + USA); the rest generated for volume |
+| Rows processed | 154,907 → **200,866** after dedup (4,134 duplicates removed) |
+| Of which real | **4,907** live postings from Adzuna (India + USA); the rest generated for volume |
 | Spark vs MapReduce | **Spark 57.1% faster (2.33×)** — median of 3 runs each, same aggregation |
 | MLlib salary model | trained on REAL postings only: GBT **R² = 0.617** vs baseline **0.475** |
-| Warehouse | 151,883 postings + **737,525** skill rows in Postgres |
+| Warehouse | 200,866 postings + **982,825** skill rows in Postgres |
 | dbt | 5 models, **17/17 data-quality tests passing** |
 | Tests | 33 Python tests passing |
 | Job search | **2.0s → 0.52s** after indexing the analytics schema (3.8× faster) |

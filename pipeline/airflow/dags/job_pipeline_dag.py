@@ -25,7 +25,18 @@ default_args = {
 }
 
 PIPELINE = "/opt/airflow/pipeline"
-DATA = "/opt/airflow/data"
+# The pipeline directory is mounted whole, so its data folder is INSIDE it. Pointing at
+# /opt/airflow/data was a path that never existed in the container: the DAG parsed fine,
+# scheduled fine, and failed at the first task that touched a file with
+# "Path does not exist: file:/opt/airflow/data/raw/*.jsonl". A wrong constant costs
+# nothing until something reads it.
+DATA = f"{PIPELINE}/data"
+
+# Absolute path to dbt's own virtualenv, not the bare `dbt` on PATH. dbt and Airflow pin
+# incompatible versions of jinja2 and SQLAlchemy, so dbt is installed in a separate venv
+# (see infra/airflow.Dockerfile) and must be invoked from there. Calling plain `dbt` would
+# either find nothing or, worse, find a different one.
+DBT = "/home/airflow/dbt-venv/bin/dbt"
 DB_URL = "postgresql://careerlens:change_me@postgres:5432/careerlens"
 
 with DAG(
@@ -44,8 +55,14 @@ with DAG(
         bash_command=(
             f"python {PIPELINE}/ingestion/job_apis.py "
             f"--out {DATA}/raw/real_postings.jsonl "
-            f'--terms "Data Engineer,Analytics Engineer,Machine Learning Engineer" '
-            f"--countries in,us"
+            f'--terms "Data Engineer,Analytics Engineer,Machine Learning Engineer,'
+            f"Data Scientist,Data Analyst,Backend Engineer,Software Engineer,"
+            f'Big Data Engineer,MLOps Engineer" '
+            f"--countries in,us "
+            # Same as run_pipeline.py: union each user's target roles into the search, so
+            # the DAG and the manual command fetch the same thing. Two paths that drift
+            # apart is how "it works when I run it" starts.
+            f"--from-profiles"
         ),
     )
 
@@ -82,12 +99,12 @@ with DAG(
         ),
     )
 
-    dbt_run = BashOperator(task_id="dbt_run", bash_command=f"cd {PIPELINE}/dbt && dbt run")
+    dbt_run = BashOperator(task_id="dbt_run", bash_command=f"cd {PIPELINE}/dbt && {DBT} run")
 
     # dbt test runs AFTER the models are built and is the pipeline's quality gate: if the
     # warehouse data is wrong, the run goes red here rather than silently serving bad
     # numbers to the dashboard.
-    dbt_test = BashOperator(task_id="dbt_test", bash_command=f"cd {PIPELINE}/dbt && dbt test")
+    dbt_test = BashOperator(task_id="dbt_test", bash_command=f"cd {PIPELINE}/dbt && {DBT} test")
 
     # Both ingestion sources feed the same ETL (fan-in); everything after is sequential
     # because each step consumes the previous step's output.

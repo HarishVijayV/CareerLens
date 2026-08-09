@@ -13,7 +13,7 @@ bell when a new posting matches your profile.
 
 Underneath: a batch data pipeline, a modelled warehouse, an ML model, and six AI agents.
 
-**151,883 job postings** — 4,911 live from Adzuna, the rest generated for volume.
+**200,866 job postings** — 4,907 live from Adzuna, the rest generated for volume.
 
 ---
 
@@ -151,8 +151,8 @@ Limits: 6 tool calls per agent, 3 calls per single tool, 4 delegations.
 
 | | |
 |---|---|
-| Postings | 151,883 (4,911 real) |
-| Skill rows | 737,525 |
+| Postings | 200,866 (4,907 real) |
+| Skill rows | 982,825 |
 | Spark vs MapReduce | **57.1% faster (2.33×)** |
 | ML model | GBT **R² 0.617** vs baseline 0.475 — *trained on real data only* |
 | dbt tests | 17/17 passing |
@@ -223,7 +223,7 @@ docker compose up -d --build --force-recreate --renew-anon-volumes
 ## Say this in an interview
 
 **On scale, before they ask:**
-> "4,911 postings are real; the rest are generated so the distributed path runs at a size
+> "4,907 postings are real; the rest are generated so the distributed path runs at a size
 > where Spark is the right tool. 5,000 rows wouldn't justify it — pandas would do."
 
 **On the ML model:**
@@ -282,21 +282,32 @@ Better than claiming you needed a cluster. It shows you can size a solution to a
 
 ---
 
-## What is automated, and what is not
+## What is automated
 
-Worth being exact about, because "Kafka works" and "it runs itself" are different claims:
+All of it, as long as Docker is running:
 
-| | Automatic? | Reality |
+| | Automatic? | How |
 |---|---|---|
-| Fetching new jobs | **no** | you run `python run_pipeline.py` |
-| Airflow schedule | **no** | DAG loaded but paused, 0 runs ever |
-| Kafka broker | yes | running, 36 events in the topic |
-| Match consumer | **no** | started by hand; not a service yet |
-| Bell notifications | yes, once the consumer runs | 13 rows created and verified |
+| Fetching new jobs | **yes** | Airflow DAG, `@daily`, unpaused |
+| Spark ETL + model training | **yes** | tasks 3 and 4 of the same DAG |
+| Warehouse load + dbt tests | **yes** | tasks 5-7; a failed test stops the run |
+| Kafka events | **yes** | published by the ingest task |
+| Bell notifications | **yes** | `match-notifier` container, `restart: unless-stopped` |
 
-The chain is proven end to end — publish, match, store, display — but nothing triggers it
-on its own. Say "the pipeline is one command and the event chain works" rather than "it
-updates daily", which is not yet true.
+```bash
+docker compose --profile bigdata up -d      # that is the whole setup
+```
+
+Verified: a full DAG run with all 7 tasks green — real Adzuna fetch (5 min), Spark,
+MLlib, load, dbt run, dbt test.
+
+**The one honest caveat:** Airflow is a container on your laptop, so it only runs while
+Docker is up, and `catchup=False` means a missed day is missed rather than queued. On a
+server that never sleeps the schedule genuinely holds — which is a better argument for
+hosting this than the public URL.
+
+- Airflow UI: **http://localhost:8080** — run history, per-task logs, retry a single step
+- Kafka UI: **http://localhost:8085** — topics and message contents
 
 ---
 

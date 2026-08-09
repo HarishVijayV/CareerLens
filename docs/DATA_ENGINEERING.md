@@ -50,18 +50,18 @@ and that's precisely the point the MapReduce benchmark below proves.
 
 | Metric | Value |
 |---|---|
-| Raw rows in | 154,911 (4,911 live Adzuna postings + 150,000 generated) |
-| After dedup | 151,883 (3,028 duplicates removed) |
+| Raw rows in | 154,907 (4,907 live Adzuna postings + 150,000 generated) |
+| After dedup | 200,866 (4,134 duplicates removed) |
 | Spark vs MapReduce | **57.1% faster / 2.33× speedup** (median of 3 runs each) |
 | MLlib GBT (real postings only) | R² = 0.617, RMSE $36,671 |
 | LinearRegression baseline | R² = 0.475, RMSE $42,916 |
-| Warehouse rows | 151,883 postings + 737,525 skill rows |
+| Warehouse rows | 200,866 postings + 982,825 skill rows |
 | dbt | 5 models, 17/17 tests passing |
 
 Committed as JSON in `pipeline/data/`. Reproduce with `python run_pipeline.py --benchmark`.
 
 **Why the model trains on real postings only — and why the lower score is the better
-result.** Trained on all 151,883 rows it scored R²=0.898, which looked excellent and meant
+result.** Trained on all 200,866 rows it scored R²=0.898, which looked excellent and meant
 nothing: 96% of the feature importance was `seniority`, because that is precisely how the
 synthetic generator computes salary. The model had recovered the generator, not the job
 market.
@@ -93,8 +93,8 @@ empty profile still fetches something and market-wide analytics keep a broad sam
 ### Indexes are built by dbt, not by hand
 
 The analytics schema had **zero** indexes: dbt creates tables and never indexes them, so
-every search sequentially scanned 151,883 rows and the profile-ranking subquery scanned
-737,525 bridge rows per row it touched. Search took ~2.0s and exhausted Postgres' shared
+every search sequentially scanned 200,866 rows and the profile-ranking subquery scanned
+982,825 bridge rows per row it touched. Search took ~2.0s and exhausted Postgres' shared
 memory under load.
 
 They are attached as dbt **post-hooks** (`macros/index_marts.sql`) rather than created
@@ -193,7 +193,7 @@ time, resume version used) — this is what powers the funnel analytics in the c
 
 ## Is this over-engineered? An honest audit, tool by tool
 
-At 151,883 rows a laptop and a few Python scripts would do the job. Several tools here are
+At 200,866 rows a laptop and a few Python scripts would do the job. Several tools here are
 therefore **demonstrations of a pattern, not solutions to a problem I actually had** — and
 saying so first is worth more than hoping nobody asks. An interviewer who works with these
 tools daily will spot an unjustified Kafka in about ten seconds.

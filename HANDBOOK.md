@@ -80,8 +80,8 @@ review and correct anything it got wrong, then save. Nothing is saved until you 
 it, because that profile decides which jobs get fetched and how every match is scored — a
 wrong value there quietly poisons everything downstream.
 
-**Browse jobs that are ranked for you.** The job board holds 151,883 postings, of which
-4,911 are live listings from real job boards. Real ones always sort first and carry a
+**Browse jobs that are ranked for you.** The job board holds 200,866 postings, of which
+4,907 are live listings from real job boards. Real ones always sort first and carry a
 green "live" badge and a working apply link; generated ones are labelled "sample". On top
 of that, your profile reorders the list: your regions first, then roles wanting the most
 of your skills, then salary. Change your profile from India to the USA and the priority
@@ -209,11 +209,11 @@ stop an LLM making numbers up" — you don't let it near unvalidated data in the
 
 | What | Result |
 |---|---|
-| Rows processed | 154,911 → **151,883** after removing 3,028 duplicates |
-| Of which real | **4,911** live postings (Adzuna India + USA); the rest generated |
+| Rows processed | 154,907 → **200,866** after removing 4,134 duplicates |
+| Of which real | **4,907** live postings (Adzuna India + USA); the rest generated |
 | Spark vs MapReduce | **57.1% faster (2.33×)** — median of 3 runs each, same aggregation |
 | ML model | trained on REAL postings only: GBT R² = **0.617** vs linear baseline **0.475** |
-| Warehouse | 151,883 postings + **737,525** skill rows |
+| Warehouse | 200,866 postings + **982,825** skill rows |
 | Data quality | 17/17 dbt tests passing |
 | Tests | 33 Python tests |
 | Kubernetes | 14/14 pods, self-healing verified by killing a pod mid-request |
@@ -222,7 +222,7 @@ Raw output committed in `pipeline/data/*.json` — you can reproduce every numbe
 
 **Why the model trains on real data only — and why a LOWER score is the better result.**
 
-Trained on all 151,883 rows it scored R²=0.898, which looked excellent and meant nothing:
+Trained on all 200,866 rows it scored R²=0.898, which looked excellent and meant nothing:
 
 ```
 seniority_idx  0.9637     <- 96% of the model
@@ -364,7 +364,7 @@ the most misleading thing this project could do.
 
 | | **Real** | **Generated** |
 |---|---|---|
-| Rows | 4,911 | 146,972 |
+| Rows | 4,907 | 146,972 |
 | Written by | `pipeline/ingestion/job_apis.py` | `pipeline/ingestion/generate_synthetic_data.py` |
 | Lands in | `data/raw/real_postings.jsonl` | `data/raw/synthetic_postings.jsonl` |
 | Source | Adzuna (India + USA), Remotive | Faker + weighted random |
@@ -375,14 +375,14 @@ the most misleading thing this project could do.
 Both files are globbed by one Spark ETL (`data/raw/*.jsonl`), so there is a single
 cleaning path, not one per source.
 
-**Why keep synthetic at all?** Honestly: volume. 4,911 real rows do not justify Spark,
+**Why keep synthetic at all?** Honestly: volume. 4,907 real rows do not justify Spark,
 partitioning, or a MLlib training set — you could do all of it in pandas. The synthetic
 rows exist so the big-data machinery is exercised at a size where it's actually the right
 tool. Say that plainly in an interview; the alternative is pretending 5k rows needs a
 cluster, which any interviewer will see through immediately.
 
 **Why not go 100% real?** Adzuna's free tier caps results per query, so more real rows
-means more search terms, not deeper pagination. 4,911 is roughly what 10 terms × 2
+means more search terms, not deeper pagination. 4,907 is roughly what 10 terms × 2
 countries × 5 pages yields. It grows every time the pipeline runs and new postings appear.
 
 **Ordering is provenance-first, everywhere:** `ORDER BY f.is_real DESC, f.salary DESC`.
@@ -598,7 +598,7 @@ in plain English, what it *can* do, what we actually made it do, and the real co
 
 ### Is this over-engineered? An honest audit, tool by tool
 
-At 151,883 rows a laptop and a few Python scripts would do the job. Several tools here are
+At 200,866 rows a laptop and a few Python scripts would do the job. Several tools here are
 therefore **demonstrations of a pattern, not solutions to a problem I actually had** — and
 saying so first is worth more than hoping nobody asks. An interviewer who works with these
 tools daily will spot an unjustified Kafka in about ten seconds.
@@ -959,7 +959,7 @@ Concretely, in this project:
 | | Who does it |
 |---|---|
 | Store users, resumes, applications | **Postgres** (the app writes directly, via SQLAlchemy) |
-| Load 151,883 cleaned rows into `raw.postings` | **Python** (`load_to_warehouse.py`, using `COPY`) |
+| Load 200,866 cleaned rows into `raw.postings` | **Python** (`load_to_warehouse.py`, using `COPY`) |
 | Turn `raw.postings` into the star schema | **dbt** (`dbt run` — 5 models) |
 | Check the result isn't broken | **dbt** (`dbt test` — 17 tests) |
 | Serve `/jobs/search` to the website | **Postgres** (the API queries it directly) |
@@ -1134,7 +1134,7 @@ fails to connect, and dies.
 returns automatically after a reboot.
 
 *Named volumes* — `postgres_data` lives outside the container, so `docker compose down`
-does not delete your 151,883 postings.
+does not delete your 200,866 postings.
 
 *`profiles: [bigdata]`* — Kafka and Airflow are declared but only start when asked, which
 is why a normal `up` doesn't cost you 1.5GB of RAM.
@@ -1453,7 +1453,7 @@ Full list in [docs/LESSONS.md](docs/LESSONS.md). The best thirteen:
    its verb — it said shared memory, not disk. Defaults sized for a toy dataset are
    quietly wrong on a real one.*
 11. **The analytics schema had ZERO indexes.** dbt builds tables and never indexes them,
-   so every search sequentially scanned 151,883 rows. Adding them as dbt post-hooks (not
+   so every search sequentially scanned 200,866 rows. Adding them as dbt post-hooks (not
    by hand — a `table` materialisation is dropped and rebuilt each run, taking any manual
    index with it) took search from 2.0s to 0.52s. → *If your ORM or transform tool creates
    the tables, something still has to create the indexes.*
@@ -1508,7 +1508,7 @@ Being able to say why something is absent is as valuable as building it.
 > genuinely distributed code paths. The same job runs unchanged on a cluster — only the
 > master URL changes. I'd rather quote a number I measured.
 
-**"Only 4,911 of those are real. Isn't the rest padding?"**
+**"Only 4,907 of those are real. Isn't the rest padding?"**
 > It's padding with a purpose, and I'd say so before you asked. Free job APIs cap out in
 > the thousands, and 5,000 rows doesn't justify Spark — pandas would do. The generated
 > rows exist so the distributed path runs at a size where it's the right tool. The real

@@ -201,6 +201,33 @@ services:
     volumes:
       - ../services/worker-service/app:/app/app
 
+  # The Kafka consumer that turns posting.discovered events into bell notifications.
+  #
+  # Its own container rather than a command you remember to run. A notification system
+  # that only works while someone holds a terminal open is a demo, not a system — and the
+  # events it misses are gone, because the consumer group's offset only advances while
+  # something is actually consuming.
+  #
+  # Separate from worker-service despite sharing an image: that one is a Celery worker
+  # pulling from Redis, this one is a Kafka consumer with a completely different lifecycle.
+  # One command per container is what lets Docker restart the right thing when it dies.
+  #
+  # bigdata profile because it needs Kafka. Without the profile there is no broker to
+  # consume from, and it would restart-loop forever against a host that does not exist.
+  match-notifier:
+    restart: unless-stopped
+    build: ../services/worker-service
+    env_file: .env
+    command: python -m app.consumers.match_notifier
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../services/worker-service/app:/app/app
+    profiles: [bigdata]
+
   notification-service:
     restart: unless-stopped
     build: ../services/notification-service
@@ -295,9 +322,16 @@ services:
     profiles: [bigdata]
 
   airflow-init:
-    image: apache/airflow:2.9.3-python3.11
+    build:
+      context: ..
+      dockerfile: infra/airflow.Dockerfile
     depends_on:
       - airflow-db
+    # Airflow shells out to the pipeline's scripts, so it needs the pipeline's
+    # credentials. Without this the ingest ran, found no Adzuna keys, and wrote an EMPTY
+    # real_postings.jsonl over the real one — a task that reports success while destroying
+    # data is far worse than one that fails.
+    env_file: .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
@@ -306,13 +340,27 @@ services:
     profiles: [bigdata]
 
   airflow-webserver:
-    image: apache/airflow:2.9.3-python3.11
+    build:
+      context: ..
+      dockerfile: infra/airflow.Dockerfile
     depends_on:
       - airflow-init
+    # Airflow shells out to the pipeline's scripts, so it needs the pipeline's
+    # credentials. Without this the ingest ran, found no Adzuna keys, and wrote an EMPTY
+    # real_postings.jsonl over the real one — a task that reports success while destroying
+    # data is far worse than one that fails.
+    env_file: .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # Inside the compose network Postgres is `postgres`, not localhost. dbt's profile
+      # reads this, so the same profiles.yml works from a laptop and from a container.
+      DBT_POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # The pipeline scripts take a full URL rather than parts.
+      PIPELINE_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     command: webserver
     ports:
       - "8080:8080"
@@ -322,13 +370,27 @@ services:
     profiles: [bigdata]
 
   airflow-scheduler:
-    image: apache/airflow:2.9.3-python3.11
+    build:
+      context: ..
+      dockerfile: infra/airflow.Dockerfile
     depends_on:
       - airflow-init
+    # Airflow shells out to the pipeline's scripts, so it needs the pipeline's
+    # credentials. Without this the ingest ran, found no Adzuna keys, and wrote an EMPTY
+    # real_postings.jsonl over the real one — a task that reports success while destroying
+    # data is far worse than one that fails.
+    env_file: .env
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # Inside the compose network Postgres is `postgres`, not localhost. dbt's profile
+      # reads this, so the same profiles.yml works from a laptop and from a container.
+      DBT_POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # The pipeline scripts take a full URL rather than parts.
+      PIPELINE_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     command: scheduler
     volumes:
       - ../pipeline/airflow/dags:/opt/airflow/dags
