@@ -432,4 +432,66 @@ At 200k rows a laptop and a few scripts would do. Three tools are demonstrations
 
 ---
 
+## Which files do you actually have to know?
+
+**23,581 files sit in the folder. 180 are yours.** The rest is `node_modules`, `.next`,
+`__pycache__` — downloaded dependencies, not code anyone wrote. `git ls-files | wc -l` is
+the honest count, and it is the one to quote if anybody asks how big this is.
+
+Of those 180, **twelve carry nearly all the reasoning.** Read these and you can explain
+the system; everything else is a variation on a pattern you will already have seen.
+
+### The twelve
+
+| # | File | Why this one |
+|---|---|---|
+| 1 | `pipeline/spark_jobs/etl_clean_jobs.py` | The ETL. `cache()`, native SQL over a UDF, the salary bug |
+| 2 | `pipeline/ingestion/job_apis.py` | Real data in: currency, skills, seniority, implausible salaries |
+| 3 | `pipeline/spark_jobs/mllib_salary_model.py` | Train + batch score, and why real-only training |
+| 4 | `pipeline/dbt/models/marts/fact_job_posting.sql` | The star schema in ~20 lines |
+| 5 | `pipeline/dbt/models/staging/stg_postings.sql` | Why a staging layer exists at all |
+| 6 | `pipeline/airflow/dags/job_pipeline_dag.py` | The 7 tasks and their dependencies |
+| 7 | `services/agent-service/app/agents/base.py` | **THE agent loop.** ~60 lines. The most important file in the repo |
+| 8 | `services/agent-service/app/agents/orchestrator.py` | Routing vs orchestration vs answering directly |
+| 9 | `services/agent-service/app/agents/definitions.py` | Every agent and exactly which tools it may call |
+| 10 | `services/gateway/app/middleware/auth_middleware.py` | Auth checked once, forged headers stripped |
+| 11 | `services/jobs-service/app/routers/jobs.py` | Bound parameters, provenance ordering, profile ranking |
+| 12 | `infra/docker-compose.yml` | How all of it is wired together |
+
+That is **2,602 lines total**, comments included — an afternoon, not a mountain.
+
+### Read them in this order
+
+1. **`docker-compose.yml`** — see the pieces before any of their contents
+2. **`etl_clean_jobs.py`** → **`fact_job_posting.sql`** — raw data becoming a warehouse
+3. **`base.py`** — read this one twice; every agent, sub-agent and orchestrator is this loop
+4. **`orchestrator.py`** → **`definitions.py`** — how the loop composes with itself
+5. **`auth_middleware.py`** → **`jobs.py`** — how a request is trusted and served
+
+### What to say when asked "how big is it?"
+
+> "About 180 source files, but twelve carry the reasoning — the Spark ETL, the dbt models,
+> the agent loop, the gateway middleware. The rest is CRUD around them. The agent loop is
+> sixty lines and everything called multi-agent in this project is that loop composed with
+> itself."
+
+**Do not** say 23,000 files. That counts `node_modules`, and someone will know.
+
+### The rest, in one line each
+
+| Group | Files | What it is |
+|---|---|---|
+| Frontend pages | 10 | One per screen. `jobs`, `copilot`, `resume` are the meaty ones |
+| Frontend shared | ~5 | `api.ts`, `AppShell.tsx`, `Charts.tsx`, `NotificationBell.tsx` |
+| Auth service | ~10 | Login, profile, resumes, applications, notifications |
+| Other services | ~15 | Each is a thin router over one concern |
+| dbt models + tests | 12 | 5 models, the rest are test and schema definitions |
+| k8s / Helm | ~12 | One template per object type |
+| Tests | 33 | Security, parsing, pipeline logic |
+| Docs | 18 | This file, the handbook, the deployment guide, and the `docs/` deep dives |
+
+(`frontend/README.md` was deleted — it was untouched `create-next-app` boilerplate that said nothing about this project.)
+
+---
+
 **More detail:** [HANDBOOK.md](HANDBOOK.md) · **Deploying:** [DEPLOYMENT.md](DEPLOYMENT.md)
