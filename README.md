@@ -25,7 +25,9 @@ frontend.
 | Warehouse | 151,883 postings + **737,525** skill rows in Postgres |
 | dbt | 5 models, **17/17 data-quality tests passing** |
 | Tests | 33 Python tests passing |
+| Job search | **2.0s → 0.52s** after indexing the analytics schema (3.8× faster) |
 | Airflow | DAG parses, 7 tasks, 0 import errors |
+| Kafka | **25 `posting.discovered` events published and read back** off the topic |
 | Kubernetes | 14/14 pods running on a 3-node kind cluster, self-healing verified |
 
 Raw numbers: `pipeline/data/benchmark_results.json`, `pipeline/data/model_metrics.json`.
@@ -34,8 +36,8 @@ Raw numbers: `pipeline/data/benchmark_results.json`, `pipeline/data/model_metric
 
 ```
 Next.js frontend  ──►  API Gateway  ──►  ┌─ auth-service      (JWT, cookies, RBAC, profiles)
-  8 pages               (auth, CORS,     ├─ jobs-service      (search + 6 analytics endpoints)
-                         rate limiting)  ├─ agent-service     (5 agents, tool calling, LangGraph)
+  10 pages              (auth, CORS,     ├─ jobs-service      (search + 6 analytics endpoints)
+                         rate limiting)  ├─ agent-service     (6 agents, tool calling, LangGraph)
                                          ├─ worker-service    (Celery background jobs)
                                          └─ notification-service
                                                 │
@@ -57,7 +59,7 @@ Next.js frontend  ──►  API Gateway  ──►  ┌─ auth-service      (J
 
 ```bash
 cp infra/.env.example infra/.env      # then add your LLM key — see SETUP_CHECKLIST.md
-cd infra && docker compose up -d      # Postgres, Redis, Kafka + 5 services
+cd infra && docker compose up -d      # 9 containers: Postgres, Redis + 6 services + frontend
 cd ../frontend && npm install && npm run dev
 ```
 
@@ -68,6 +70,41 @@ Run the whole data pipeline in one command:
 ```bash
 cd pipeline && python run_pipeline.py
 ```
+
+## What's optional, and what everything costs
+
+Nine containers start by default. Kafka, Airflow, HDFS and the Kafka UI sit behind a
+compose **profile**, so they only run when asked:
+
+```bash
+docker compose --profile bigdata up -d     # adds Kafka, Airflow, HDFS, Kafka UI (~1.2GB)
+```
+
+They are off by default for **RAM, not cost** — the two get conflated constantly:
+
+| | Cost | Default | Why |
+|---|---|---|---|
+| Spark, Hadoop, dbt, Postgres, Redis, Parquet | free | **on** | open source, runs locally |
+| Kafka, Airflow | free | **off** | ~600MB each on a laptop |
+| Snowflake | **paid** ($400 trial, 30 days) | off | dbt falls back to Postgres automatically |
+| Fireworks (LLM) | pay per call | on | fractions of a cent per question |
+| Adzuna | free tier | on | daily quota, ample for one run a day |
+
+**Neither Kafka nor Airflow is a dependency.** With Kafka down the ingest prints
+`Kafka unavailable — events skipped` and finishes normally; an announcement failing must
+never stop a data load. Without Airflow, `python run_pipeline.py` runs the identical seven
+steps — Airflow calls those same scripts, it holds no logic of its own.
+
+Once the profile is up:
+
+| URL | What |
+|---|---|
+| http://localhost:3000 | the app |
+| http://localhost:8085 | Kafka UI — topics, partitions, message contents |
+| http://localhost:8081 | Adminer — browse the database |
+
+Kafka's own port (`29092`) speaks a binary protocol, not HTTP — a browser gets
+`ERR_EMPTY_RESPONSE` there, which is expected. That is what the UI is for.
 
 ## Documentation
 
@@ -94,7 +131,7 @@ services/            seven services, each with its own Dockerfile
   gateway/             single public entrypoint: auth middleware, CORS, rate limiting
   auth-service/        signup/login/refresh, bcrypt, JWT + rotating refresh tokens, profiles
   jobs-service/        job search + analytics over the dbt star schema, Redis cache-aside
-  agent-service/       LLM provider abstraction, 5 agents, tool registry, LangGraph version
+  agent-service/       LLM provider abstraction, 6 agents, tool registry, LangGraph version
   worker-service/      Celery background jobs + Gmail sync + Kafka consumer
   notification-service/
   mcp-server/          MCP tools for external AI clients, network-isolated
@@ -105,7 +142,7 @@ pipeline/            the data engineering side, independent of the web app
   airflow/dags/        orchestration
   dbt/                 star schema models + data-quality tests
   run_pipeline.py      run the whole thing in one command
-frontend/            Next.js app (8 pages, inline-SVG charts, no chart library)
+frontend/            Next.js app (10 pages, inline-SVG charts, no chart library)
 tests/               33 tests covering security, parsing and pipeline logic
 infra/               docker-compose (core + bigdata profile), env templates
 k8s/                 kind cluster config + Helm chart (verified on a 3-node cluster)
