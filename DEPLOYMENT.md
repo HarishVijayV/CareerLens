@@ -470,6 +470,39 @@ daily and postings do not change by the minute.
 
 ---
 
+### 3.1 Making the pipeline run itself
+
+On a laptop a schedule is not really a schedule: Airflow is a container, so it stops when
+the machine sleeps, and `catchup=False` means missed days are simply missed. A server that
+never sleeps is the first place a daily run actually holds — which is a better reason to
+host this than the public URL.
+
+On the server:
+
+```bash
+cd ~/CareerLens/infra
+docker compose --profile bigdata up -d                     # Airflow + Kafka (~1.2GB)
+docker compose exec airflow-scheduler airflow dags unpause job_pipeline
+```
+
+Two cautions before you do:
+
+* **RAM.** The bigdata profile adds ~1.2GB. On a 4GB VM running the app as well, that is
+  tight. Check with `docker stats` before leaving it running.
+* **Spark.** The DAG's ETL step wants Java and burst memory. On a small VM, either keep
+  running the pipeline on your laptop and copying the dump up (section 3), or give the DAG
+  only the ingest and dbt steps and leave Spark local.
+
+Airflow's UI is on **:8080**, which you should NOT open to the internet. Reach it through
+an SSH tunnel instead of a firewall rule:
+
+```bash
+ssh -i careerlens-vm_key.pem -L 8080:localhost:8080 azureuser@<SERVER_IP>
+```
+
+Then open <http://localhost:8080> on your own machine. The tunnel closes with the SSH
+session, so nothing is left exposed.
+
 ## 4. How code gets from your laptop to the server
 
 You have two ways. Start with the simple one.

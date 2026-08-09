@@ -55,8 +55,8 @@ cd pipeline && python run_pipeline.py
 | **Parquet** | Column-based file format. Reading one column doesn't load the rest. |
 | **PostgreSQL** | Where everything lives — your data + the warehouse. |
 | **Redis** | Cache, rate limits, job queue. Nothing permanent. |
-| **Airflow** | Runs the pipeline daily with retries. Written, **switched off** (RAM). |
-| **Kafka** | Announces "new jobs found" so services can react. Written, **switched off** (RAM). |
+| **Airflow** | Schedules the pipeline daily with retries + run history. Running, **DAG paused** — see below. |
+| **Kafka** | Announces "new jobs found" so services can react. Running; 25 events verified. No consumer runs yet. |
 | **Snowflake** | Cloud warehouse alternative. **The only paid thing.** Not configured — dbt falls back to Postgres. |
 
 ### Backend
@@ -86,11 +86,13 @@ Docker · Docker Compose · Kubernetes · Helm · kind · Nginx · GitHub Action
 
 ---
 
-## The 9 containers
+## The containers
+
+Nine by default. The `bigdata` profile adds Kafka, Airflow, HDFS and the Kafka UI (~1.2GB).
 
 | Container | Job |
 |---|---|
-| **frontend** | The website (7 pages) |
+| **frontend** | The website (10 pages) |
 | **gateway** | Only public door. Verifies JWT, strips forged headers. |
 | **auth-service** | You: account, profile, resumes, applications, Google token |
 | **jobs-service** | Job search + analytics. **Read-only.** |
@@ -158,6 +160,32 @@ Limits: 6 tool calls per agent, 3 calls per single tool, 4 delegations.
 
 ---
 
+### Does it actually run on a schedule? Honestly: not yet
+
+The DAG is **loaded but paused**, and has never run — `airflow dags list-runs` returns
+"No data found". Right now the pipeline runs when you type `python run_pipeline.py`, and
+at no other time.
+
+Two things have to be true for a 2am run to happen, and both are easy to miss:
+
+1. **The DAG must be unpaused.** New DAGs start paused on purpose, so switching Airflow on
+   never launches something unexpected.
+   ```bash
+   docker compose exec airflow-scheduler airflow dags unpause job_pipeline
+   ```
+2. **The machine must be awake.** Airflow is a container on your laptop. Shut the laptop
+   and the scheduler stops with it — and `catchup=False` means it does **not** run the
+   missed days when you come back. A missed day is simply missed.
+
+That second point is the real argument for hosting it: on a server that never sleeps, the
+schedule genuinely holds. On a laptop, "daily at 2am" means "daily at 2am **on days the
+laptop happens to be on at 2am**", which is not a schedule.
+
+**The run history** lives at http://localhost:8080 (Airflow UI). Once it has run a few
+times you get a grid of every run, green or red per task, with the logs of any failure
+and a button to re-run just the failed step. That history is the thing you cannot get
+from typing a command yourself — it is the reason Airflow exists.
+
 ## Commands
 
 ```bash
@@ -173,8 +201,11 @@ cd pipeline && python run_pipeline.py
 # just new postings
 python run_pipeline.py --only real,spark,load,dbt
 
-# turn on Airflow + Kafka
+# turn on Airflow + Kafka   (Airflow :8080 · Kafka UI :8085 · Adminer :8081)
 docker compose --profile bigdata up -d
+
+# make the daily schedule actually happen (it starts paused)
+docker compose exec airflow-scheduler airflow dags unpause job_pipeline
 
 # free 3GB — the Kubernetes practice cluster is NOT the app
 kind delete cluster --name careerlens

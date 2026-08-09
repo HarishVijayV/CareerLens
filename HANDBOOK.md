@@ -432,7 +432,7 @@ python run_pipeline.py --skip-real                 # offline, no API calls
 profile, so it is **off unless you ask for it**:
 
 ```bash
-docker compose --profile bigdata up -d      # Airflow UI on :8081
+docker compose --profile bigdata up -d      # Airflow :8080, Kafka UI :8085
 ```
 
 Daily is the right cadence and worth being able to defend: job postings don't change by
@@ -601,7 +601,7 @@ thing has a bill attached.
 Turn the two free ones on whenever you want them:
 
 ```bash
-docker compose --profile bigdata up -d      # Airflow UI on :8081, Kafka on :9092
+docker compose --profile bigdata up -d      # Airflow :8080, Kafka UI :8085
 ```
 
 **Snowflake expiring costs you nothing**, and that is the point of writing transformations
@@ -808,6 +808,32 @@ failing must never stop a data load. Say "the producer is wired and runs when th
 is up", not "we use Kafka in production".
 
 ---
+
+### Does it actually run on a schedule? Honestly: not yet
+
+The DAG is **loaded but paused**, and has never run — `airflow dags list-runs` returns
+"No data found". Right now the pipeline runs when you type `python run_pipeline.py`, and
+at no other time.
+
+Two things have to be true for a 2am run to happen, and both are easy to miss:
+
+1. **The DAG must be unpaused.** New DAGs start paused on purpose, so switching Airflow on
+   never launches something unexpected.
+   ```bash
+   docker compose exec airflow-scheduler airflow dags unpause job_pipeline
+   ```
+2. **The machine must be awake.** Airflow is a container on your laptop. Shut the laptop
+   and the scheduler stops with it — and `catchup=False` means it does **not** run the
+   missed days when you come back. A missed day is simply missed.
+
+That second point is the real argument for hosting it: on a server that never sleeps, the
+schedule genuinely holds. On a laptop, "daily at 2am" means "daily at 2am **on days the
+laptop happens to be on at 2am**", which is not a schedule.
+
+**The run history** lives at http://localhost:8080 (Airflow UI). Once it has run a few
+times you get a grid of every run, green or red per task, with the logs of any failure
+and a button to re-run just the failed step. That history is the thing you cannot get
+from typing a command yourself — it is the reason Airflow exists.
 
 ### Airflow — the scheduler
 
