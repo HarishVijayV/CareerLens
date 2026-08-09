@@ -99,6 +99,27 @@ services:
       retries: 10
       start_period: 30s
 
+  # Kafka speaks a binary protocol over TCP, not HTTP — opening localhost:29092 in a
+  # browser returns ERR_EMPTY_RESPONSE, because there is no web server there to answer.
+  # This gives the broker an actual UI: topics, partitions, and the messages themselves.
+  #
+  # Same bigdata profile, so it only runs when you ask for Kafka anyway.
+  kafka-ui:
+    restart: unless-stopped
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "${KAFKA_UI_PORT:-8085}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: careerlens
+      # kafka:9092 because this container is INSIDE the compose network — the same
+      # distinction that made host publishing fail silently until it was detected.
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    profiles: [bigdata]
+
   adminer:
     restart: unless-stopped
     image: adminer:latest
