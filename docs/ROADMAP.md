@@ -23,7 +23,7 @@ Repo structure, all docs, docker-compose, six services, pipeline scripts, fronte
 - Real job-board ingestion — Adzuna (India + USA), Remotive, with a title-based relevance
   filter added after the API returned unrelated roles
 - PySpark ETL: dedupe, salary cleaning via native SQL, 4 aggregate tables, skills bridge table
-- **Verified:** 154,907 rows → 200,866 after removing 4,134 duplicates (4,907 of them live postings)
+- **Verified:** 205,397 rows → 201,356 after removing 4,134 duplicates (4,907 of them live postings)
 
 ## DONE — Phase 3: Scale + benchmark
 - Hadoop Streaming mapper/reducer, and the same aggregation in Spark

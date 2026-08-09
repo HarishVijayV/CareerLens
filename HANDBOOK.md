@@ -80,7 +80,7 @@ review and correct anything it got wrong, then save. Nothing is saved until you 
 it, because that profile decides which jobs get fetched and how every match is scored — a
 wrong value there quietly poisons everything downstream.
 
-**Browse jobs that are ranked for you.** The job board holds 200,866 postings, of which
+**Browse jobs that are ranked for you.** The job board holds 201,356 postings, of which
 4,907 are live listings from real job boards. Real ones always sort first and carry a
 green "live" badge and a working apply link; generated ones are labelled "sample". On top
 of that, your profile reorders the list: your regions first, then roles wanting the most
@@ -209,11 +209,11 @@ stop an LLM making numbers up" — you don't let it near unvalidated data in the
 
 | What | Result |
 |---|---|
-| Rows processed | 154,907 → **200,866** after removing 4,134 duplicates |
+| Rows processed | 205,397 → **5,397** after removing 4,134 duplicates |
 | Of which real | **4,907** live postings (Adzuna India + USA); the rest generated |
 | Spark vs MapReduce | **57.1% faster (2.33×)** — median of 3 runs each, same aggregation |
 | ML model | trained on REAL postings only: GBT R² = **0.617** vs linear baseline **0.475** |
-| Warehouse | 200,866 postings + **982,825** skill rows |
+| Warehouse | 201,356 postings + **737,525** skill rows |
 | Data quality | 17/17 dbt tests passing |
 | Tests | 33 Python tests |
 | Kubernetes | 14/14 pods, self-healing verified by killing a pod mid-request |
@@ -222,7 +222,7 @@ Raw output committed in `pipeline/data/*.json` — you can reproduce every numbe
 
 **Why the model trains on real data only — and why a LOWER score is the better result.**
 
-Trained on all 200,866 rows it scored R²=0.898, which looked excellent and meant nothing:
+Trained on all 5,397 rows it scored R²=0.898, which looked excellent and meant nothing:
 
 ```
 seniority_idx  0.9637     <- 96% of the model
@@ -598,7 +598,7 @@ in plain English, what it *can* do, what we actually made it do, and the real co
 
 ### Is this over-engineered? An honest audit, tool by tool
 
-At 200,866 rows a laptop and a few Python scripts would do the job. Several tools here are
+At 5,397 rows a laptop and a few Python scripts would do the job. Several tools here are
 therefore **demonstrations of a pattern, not solutions to a problem I actually had** — and
 saying so first is worth more than hoping nobody asks. An interviewer who works with these
 tools daily will spot an unjustified Kafka in about ten seconds.
@@ -926,6 +926,98 @@ times you get a grid of every run, green or red per task, with the logs of any f
 and a button to re-run just the failed step. That history is the thing you cannot get
 from typing a command yourself — it is the reason Airflow exists.
 
+## The two dashboards — what you see and how to read it
+
+Both only exist when the `bigdata` profile is up:
+
+```bash
+cd infra && docker compose --profile bigdata up -d
+```
+
+| URL | What | Login |
+|---|---|---|
+| <http://localhost:8080> | **Airflow** — did the pipeline run, and did it work? | `admin` / `admin` |
+| <http://localhost:8085> | **Kafka UI** — did the events actually get delivered? | none |
+| <http://localhost:8081> | Adminer — browse the database directly | see below |
+
+---
+
+### Airflow — reading the DAGs screen
+
+One row, `job_pipeline`. Every column answers a specific question:
+
+| Column | Reads as | What it means |
+|---|---|---|
+| **Toggle** (blue = on) | unpaused | It will run on schedule. Off = loaded but dormant. |
+| **Runs** | `2` green, `2` red | Two succeeded, two failed. The circles are counts, not buttons. |
+| **Schedule** | `@daily` | Midnight. `catchup=False`, so a missed day is missed, not queued. |
+| **Last Run** | a timestamp | When it last STARTED — not when it finished. |
+| **Next Run** | tonight's date | When it will fire next. |
+| **Recent Tasks** | green `7` | All 7 tasks of the newest run passed. A red circle here means that many failed. |
+
+**A red run is not a problem to hide.** "It failed twice, here is why" is the entire reason
+this exists rather than a cron job — the two red ones here are the runs from before Java
+and dbt were fixed in the Airflow image.
+
+**What to click, in order of usefulness:**
+
+1. **The DAG name** → **Grid** view. Rows are tasks, columns are runs, each square is one
+   task in one run. This is the screen you actually live in.
+2. **Any square** → **Logs**. The real stdout of that step — where a failure explains
+   itself.
+3. **▶ (play)** in Actions → **Trigger DAG**. Runs it NOW rather than waiting for midnight.
+   This is the button to use when you want to demo it.
+4. **Graph** tab → the seven tasks as a flowchart. `ingest` and `generate` run in parallel,
+   then everything after is a chain.
+5. **Clear** on a single failed task → re-runs just that task, keeping everything already
+   computed. This is the capability a shell script cannot offer, and worth demonstrating.
+
+**Do not** touch the 🗑 in Actions — it deletes the run history, which is the useful part.
+
+**Reading a failure:** Grid → find the red square → click → Logs → scroll to the bottom.
+The error is almost always in the last twenty lines. Then Clear that one task rather than
+re-running all seven minutes.
+
+---
+
+### Kafka UI — reading the cluster screen
+
+The landing page shows the cluster: `careerlens`, 1 broker, 2 topics.
+
+**"0 Bytes production / consumption" is not an error.** That is the live throughput right
+now, and events only flow while the pipeline is ingesting.
+
+**What to click:**
+
+1. **☰ → Topics → `posting.discovered`** — the only topic that matters. The other,
+   `__consumer_offsets`, is Kafka's own bookkeeping of who has read what.
+2. **Messages** tab — the actual job events, as JSON, with their keys. This is the proof
+   that publishing works, and the screen that would have caught the bug where the producer
+   reported success while the topic stayed empty.
+3. **Consumers** — shows `match-notifier` and its **lag**: how many messages it has not
+   read yet. Lag climbing steadily means the consumer is down or too slow. Lag at zero
+   means it is keeping up.
+
+**What the events are for.** One `posting.discovered` is read by any number of independent
+consumers. Today that is the match notifier, which decides per profile — two or more of
+your skills overlap, OR your target role is in the title — and writes a row the bell
+reads. An embedder for semantic search and a weekly digest are the obvious next two, and
+adding either means deploying a consumer, not editing the pipeline.
+
+That independence is the whole justification: with direct calls, a broken notifier takes
+ingestion down with it.
+
+---
+
+### Adminer — the database
+
+System `PostgreSQL` · Server `postgres` · User `careerlens` · Password from `infra/.env`
+(`POSTGRES_PASSWORD`) · Database `careerlens`.
+
+Two schemas worth knowing: `raw` is what the loader wrote, `analytics` is what dbt built
+and the only one the app reads.
+---
+
 ### Airflow — the scheduler
 
 **What it is.** Runs your pipeline steps as a **DAG** — a graph of tasks with dependencies,
@@ -959,7 +1051,7 @@ Concretely, in this project:
 | | Who does it |
 |---|---|
 | Store users, resumes, applications | **Postgres** (the app writes directly, via SQLAlchemy) |
-| Load 200,866 cleaned rows into `raw.postings` | **Python** (`load_to_warehouse.py`, using `COPY`) |
+| Load 5,397 cleaned rows into `raw.postings` | **Python** (`load_to_warehouse.py`, using `COPY`) |
 | Turn `raw.postings` into the star schema | **dbt** (`dbt run` — 5 models) |
 | Check the result isn't broken | **dbt** (`dbt test` — 17 tests) |
 | Serve `/jobs/search` to the website | **Postgres** (the API queries it directly) |
@@ -1134,7 +1226,7 @@ fails to connect, and dies.
 returns automatically after a reboot.
 
 *Named volumes* — `postgres_data` lives outside the container, so `docker compose down`
-does not delete your 200,866 postings.
+does not delete your 201,356 postings.
 
 *`profiles: [bigdata]`* — Kafka and Airflow are declared but only start when asked, which
 is why a normal `up` doesn't cost you 1.5GB of RAM.
@@ -1453,7 +1545,7 @@ Full list in [docs/LESSONS.md](docs/LESSONS.md). The best thirteen:
    its verb — it said shared memory, not disk. Defaults sized for a toy dataset are
    quietly wrong on a real one.*
 11. **The analytics schema had ZERO indexes.** dbt builds tables and never indexes them,
-   so every search sequentially scanned 200,866 rows. Adding them as dbt post-hooks (not
+   so every search sequentially scanned 5,397 rows. Adding them as dbt post-hooks (not
    by hand — a `table` materialisation is dropped and rebuilt each run, taking any manual
    index with it) took search from 2.0s to 0.52s. → *If your ORM or transform tool creates
    the tables, something still has to create the indexes.*

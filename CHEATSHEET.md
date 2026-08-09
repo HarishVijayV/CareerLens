@@ -15,7 +15,7 @@ was made. This is *what happens, in order*.
                         │  A. TWO SOURCES                          │
                         │  Adzuna API        synthetic generator   │
                         └───────┬──────────────────────┬───────────┘
-                                │  4,907 real          │  ~196k fake
+                                │  5,397 real          │  ~196k generated
                                 └──────────┬───────────┘
                                            ▼
                                 ┌────────────────────┐
@@ -90,7 +90,7 @@ was made. This is *what happens, in order*.
 | | |
 |---|---|
 | **In** | your profile's target roles + countries |
-| **Out** | `real_postings.jsonl` (4,907) · `synthetic_postings.jsonl` (~196k) |
+| **Out** | `real_postings.jsonl` (5,397) · `synthetic_postings.jsonl` (~196k) |
 | **Code** | `pipeline/ingestion/job_apis.py` · `generate_synthetic_data.py` |
 
 Adzuna is queried per search term, per country, 5 pages each. Terms come from **your
@@ -103,7 +103,7 @@ salary converted to **USD** (Adzuna returns each country's currency as a bare nu
 inferred** from the title, and salaries below $5,000/yr **nulled** — those are monthly
 Indian figures in an annual field, and a guessed salary is worse than a missing one.
 
-**Why synthetic too:** 4,907 real rows do not justify Spark. The generated rows exist so
+**Why synthetic too:** 5,397 real rows do not justify Spark. The generated rows exist so
 the distributed path runs at a size where its optimisations are measurable.
 
 ---
@@ -337,6 +337,98 @@ and `catchup=False` means a missed day is missed rather than queued.
 
 ---
 
+## The two dashboards — what you see and how to read it
+
+Both only exist when the `bigdata` profile is up:
+
+```bash
+cd infra && docker compose --profile bigdata up -d
+```
+
+| URL | What | Login |
+|---|---|---|
+| <http://localhost:8080> | **Airflow** — did the pipeline run, and did it work? | `admin` / `admin` |
+| <http://localhost:8085> | **Kafka UI** — did the events actually get delivered? | none |
+| <http://localhost:8081> | Adminer — browse the database directly | see below |
+
+---
+
+### Airflow — reading the DAGs screen
+
+One row, `job_pipeline`. Every column answers a specific question:
+
+| Column | Reads as | What it means |
+|---|---|---|
+| **Toggle** (blue = on) | unpaused | It will run on schedule. Off = loaded but dormant. |
+| **Runs** | `2` green, `2` red | Two succeeded, two failed. The circles are counts, not buttons. |
+| **Schedule** | `@daily` | Midnight. `catchup=False`, so a missed day is missed, not queued. |
+| **Last Run** | a timestamp | When it last STARTED — not when it finished. |
+| **Next Run** | tonight's date | When it will fire next. |
+| **Recent Tasks** | green `7` | All 7 tasks of the newest run passed. A red circle here means that many failed. |
+
+**A red run is not a problem to hide.** "It failed twice, here is why" is the entire reason
+this exists rather than a cron job — the two red ones here are the runs from before Java
+and dbt were fixed in the Airflow image.
+
+**What to click, in order of usefulness:**
+
+1. **The DAG name** → **Grid** view. Rows are tasks, columns are runs, each square is one
+   task in one run. This is the screen you actually live in.
+2. **Any square** → **Logs**. The real stdout of that step — where a failure explains
+   itself.
+3. **▶ (play)** in Actions → **Trigger DAG**. Runs it NOW rather than waiting for midnight.
+   This is the button to use when you want to demo it.
+4. **Graph** tab → the seven tasks as a flowchart. `ingest` and `generate` run in parallel,
+   then everything after is a chain.
+5. **Clear** on a single failed task → re-runs just that task, keeping everything already
+   computed. This is the capability a shell script cannot offer, and worth demonstrating.
+
+**Do not** touch the 🗑 in Actions — it deletes the run history, which is the useful part.
+
+**Reading a failure:** Grid → find the red square → click → Logs → scroll to the bottom.
+The error is almost always in the last twenty lines. Then Clear that one task rather than
+re-running all seven minutes.
+
+---
+
+### Kafka UI — reading the cluster screen
+
+The landing page shows the cluster: `careerlens`, 1 broker, 2 topics.
+
+**"0 Bytes production / consumption" is not an error.** That is the live throughput right
+now, and events only flow while the pipeline is ingesting.
+
+**What to click:**
+
+1. **☰ → Topics → `posting.discovered`** — the only topic that matters. The other,
+   `__consumer_offsets`, is Kafka's own bookkeeping of who has read what.
+2. **Messages** tab — the actual job events, as JSON, with their keys. This is the proof
+   that publishing works, and the screen that would have caught the bug where the producer
+   reported success while the topic stayed empty.
+3. **Consumers** — shows `match-notifier` and its **lag**: how many messages it has not
+   read yet. Lag climbing steadily means the consumer is down or too slow. Lag at zero
+   means it is keeping up.
+
+**What the events are for.** One `posting.discovered` is read by any number of independent
+consumers. Today that is the match notifier, which decides per profile — two or more of
+your skills overlap, OR your target role is in the title — and writes a row the bell
+reads. An embedder for semantic search and a weekly digest are the obvious next two, and
+adding either means deploying a consumer, not editing the pipeline.
+
+That independence is the whole justification: with direct calls, a broken notifier takes
+ingestion down with it.
+
+---
+
+### Adminer — the database
+
+System `PostgreSQL` · Server `postgres` · User `careerlens` · Password from `infra/.env`
+(`POSTGRES_PASSWORD`) · Database `careerlens`.
+
+Two schemas worth knowing: `raw` is what the loader wrote, `analytics` is what dbt built
+and the only one the app reads.
+---
+
 ## What is automated
 
 All of it, while Docker is up:
@@ -369,8 +461,8 @@ Verified: a full DAG run, all 7 tasks green, including a real 5-minute Adzuna fe
 
 | | |
 |---|---|
-| Postings | 200,866 (4,907 real) |
-| Skill rows | 982,825 |
+| Postings | 201,356 (5,397 real, charts use these only) |
+| Skill rows | 737,525 |
 | Spark vs MapReduce | **57.1% faster (2.33×)** |
 | ML model | GBT **R² 0.617** vs baseline 0.475 — real data only |
 | dbt tests | 17/17 |
