@@ -30,7 +30,56 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
+def _resolve_bootstrap() -> str:
+    """Pick the Kafka address that works from wherever this is running.
+
+    Kafka advertises two addresses, and which one you need depends on which side of Docker
+    you are on:
+
+        kafka:9092        inside the compose network
+        localhost:29092   from the host machine
+
+    infra/.env sets `kafka:9092` because that is right for every service in the stack. But
+    the pipeline usually runs on the HOST, where the name `kafka` does not resolve at all —
+    so the producer failed to connect and every ingest quietly printed "Kafka unavailable",
+    which reads as "Kafka isn't running" rather than "you're using the wrong address".
+
+    Same shape of bug as pointing the browser at `gateway:8000`: a container-internal name
+    used from outside it. Detected here rather than left to be configured, because getting
+    it wrong produces silence, not an error.
+    """
+    configured = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
+    if not configured:
+        return ""
+
+    # A hostname only Docker's DNS knows about, resolved from outside it, means we are on
+    # the host and should use the advertised host listener instead.
+    if "kafka:" in configured:
+        import socket
+
+        try:
+            socket.gethostbyname("kafka")
+        except OSError:
+            return os.getenv("KAFKA_BOOTSTRAP_HOST", "localhost:29092")
+
+    return configured
+
+
+# Resolved when first needed, NOT at import.
+#
+# job_apis.py does `from events import publish_postings_discovered` at the top of the file
+# and calls _load_env_file() further down — so a module-level lookup here ran before
+# infra/.env had been read, found nothing, and disabled publishing for the whole run. The
+# symptom was "Kafka unavailable", which sends you looking at the broker instead of at
+# import order.
+_bootstrap: str | None = None
+
+
+def _bootstrap_servers() -> str:
+    global _bootstrap
+    if _bootstrap is None:
+        _bootstrap = _resolve_bootstrap()
+    return _bootstrap
 
 TOPIC_POSTING_DISCOVERED = "posting.discovered"
 TOPIC_APPLICATION_UPDATED = "application.updated"
@@ -47,7 +96,8 @@ def _get_producer():
     if _producer is not None or _unavailable:
         return _producer
 
-    if not KAFKA_BOOTSTRAP:
+    bootstrap = _bootstrap_servers()
+    if not bootstrap:
         logger.info("KAFKA_BOOTSTRAP_SERVERS unset — event publishing disabled")
         _unavailable = True
         return None
@@ -56,7 +106,7 @@ def _get_producer():
         from kafka import KafkaProducer
 
         _producer = KafkaProducer(
-            bootstrap_servers=KAFKA_BOOTSTRAP.split(","),
+            bootstrap_servers=bootstrap.split(","),
             value_serializer=lambda v: json.dumps(v).encode(),
             key_serializer=lambda k: k.encode() if k else None,
             # Wait for the leader only. Full ISR acks would be right for financial data;
@@ -67,7 +117,7 @@ def _get_producer():
             request_timeout_ms=5000,
             max_block_ms=5000,   # never let a dead broker hang ingestion
         )
-        logger.info("Kafka producer connected to %s", KAFKA_BOOTSTRAP)
+        logger.info("Kafka producer connected to %s", bootstrap)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Kafka unavailable (%s) — continuing without events", exc)
         _unavailable = True
