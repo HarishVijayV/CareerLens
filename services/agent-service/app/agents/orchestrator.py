@@ -47,19 +47,40 @@ _ROUTER_PROMPT = """You are the planner. Decide the CHEAPEST way to answer the u
 Available specialists:
 {catalog}
 
-You have two choices:
+You have THREE choices:
 
-1. Name ONE specialist, if that specialist alone can fully answer the question.
-2. Answer "orchestrator", if the question needs SEVERAL specialists combined. Choose this
+1. Answer "none" when the message needs no data at all — a greeting ("hi", "hello",
+   "thanks"), small talk, or a question about what this assistant can do. These get a
+   short direct reply. Choosing a specialist for "hello" makes it search the job market
+   and return a full report nobody asked for.
+2. Name ONE specialist, if that specialist alone can fully answer the question.
+3. Answer "orchestrator", if the question needs SEVERAL specialists combined. Choose this
    whenever the question spans more than one specialist's remit — for example "match jobs
    to my resume AND tell me what to fix" needs the job matcher AND the resume tailor, and
    "which jobs suit me and is that field growing?" needs the matcher AND the analyst.
 
-Respond with ONLY a JSON object: {{"agent": "<name or orchestrator>", "reason": "<short reason>"}}
+Respond with ONLY a JSON object: {{"agent": "<none, a specialist name, or orchestrator>", "reason": "<short reason>"}}
 
 Prefer a single specialist when one genuinely suffices — orchestration costs several times
 more. But do NOT force a multi-part question into one specialist: a partial answer that
-silently drops half the question is worse than the extra cost."""
+silently drops half the question is worse than the extra cost.
+
+And do not force a greeting into a specialist either. "none" exists precisely so you never
+have to pick the least-bad agent for a message that needs no agent."""
+
+_SMALL_TALK_PROMPT = """You are the assistant for CareerLens, a job-search tool.
+
+Reply in ONE or TWO short sentences. No headings, no tables, no bullet lists.
+
+Talk TO the user, not about them: say "your resume", never "their resume". Writing the
+prompt in the third person made it answer "I can rewrite their resume", which reads as if
+it is discussing someone else.
+
+You have no data in front of you right now, so do not state anything about their profile,
+resume, or any job. If they want those, say what to ask for.
+
+What you can do, if it helps to mention it: find jobs matching your profile, rewrite your
+resume for a specific role, and answer questions about the job market."""
 
 _ORCHESTRATOR_PROMPT = """You are the orchestrator for a job-search assistant.
 
@@ -126,7 +147,7 @@ def choose_agent(user_message: str) -> dict:
         # Validate against DELEGATABLE, not AGENTS. The prompt only offers these, but a
         # model can still name something it saw elsewhere, and accepting a tool-less agent
         # here would reintroduce the empty-JSON answer this list exists to prevent.
-        if choice.get("agent") in DELEGATABLE or choice.get("agent") == "orchestrator":
+        if choice.get("agent") in DELEGATABLE or choice.get("agent") in ("orchestrator", "none"):
             return choice
     except json.JSONDecodeError:
         pass
@@ -145,6 +166,31 @@ def route_with_llm(user_message: str) -> dict:
     user doesn't have to know which mode their question needs.
     """
     choice = choose_agent(user_message)
+
+    if choice["agent"] == "none":
+        # Answer directly: one LLM call, no tools, no agent.
+        #
+        # "hello" used to route to job_matcher, which dutifully read the profile, ran three
+        # searches and returned a full job-market report with skill-gap analysis. The
+        # planner even said "greeting does not require specialized response" while picking
+        # one, because its prompt gave it no way to say "none". A router with no null
+        # option will always return its least-bad guess.
+        provider = get_llm_provider()
+        response = provider.chat(
+            [
+                {"role": "system", "content": _SMALL_TALK_PROMPT},
+                {"role": "user", "content": _strip_user_id(user_message)},
+            ]
+        )
+        return {
+            "mode": "direct",
+            "agent": "assistant",
+            "routing_reason": choice.get("reason", "no data needed"),
+            "answer": response.content or "Hi — ask me about jobs, your resume, or the market.",
+            "tool_calls": [],
+            "iterations": 0,
+            "stopped_early": False,
+        }
 
     if choice["agent"] == "orchestrator":
         result = orchestrate(user_message)
@@ -194,6 +240,15 @@ def _delegation_tools() -> list[dict]:
         }
         for name in DELEGATABLE
     ]
+
+
+def _strip_user_id(message: str) -> str:
+    """Drop the router's `[user_id: ...]` line before showing a message to a tool-less call.
+
+    Without tools there is nothing to look the id up with, so leaving it in only invites
+    the model to mention a uuid back to the user.
+    """
+    return re.sub(r"^\s*\[user_id:[^\]]*\]\s*", "", message.strip())
 
 
 def _extract_user_id(message: str) -> str | None:
