@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
-import { BarChart, ChartFrame, LineChart, Lollipop, StatTile } from "@/components/Charts";
+import { BarChart, ChartFrame, Histogram, LineChart, Lollipop, StatTile } from "@/components/Charts";
 import { api } from "@/lib/api";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -20,6 +20,7 @@ export default function AnalyticsPage() {
   const [topSkills, setTopSkills] = useState<{ skill_name: string; posting_count: number }[]>([]);
   const [bySeniority, setBySeniority] = useState<{ seniority: string; avg_salary: number }[]>([]);
   const [byRegion, setByRegion] = useState<{ region: string; avg_salary: number }[]>([]);
+  const [distribution, setDistribution] = useState<{ bucket_start: number; postings: number }[]>([]);
   const [byMonth, setByMonth] = useState<{ posted_month: number; postings: number }[]>([]);
   const [premium, setPremium] = useState<
     { skill_name: string; avg_salary: number; premium_vs_average: number }[]
@@ -33,6 +34,7 @@ export default function AnalyticsPage() {
       api.analytics<typeof bySeniority>("salary-by-seniority").then(setBySeniority),
       api.analytics<typeof byRegion>("salary-by-region").then(setByRegion),
       api.analytics<typeof byMonth>("postings-by-month").then(setByMonth),
+      api.analytics<typeof distribution>("salary-distribution").then(setDistribution),
     ]).catch((e) => setError(e.message));
   }, []);
 
@@ -83,7 +85,10 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* items-start so each card is its own height. Without it a grid row stretches
+          every card to match its tallest sibling, so a 3-row lollipop sat in a card sized
+          for a 12-bar chart with a block of empty space underneath. */}
+      <div className="grid items-start gap-6 lg:grid-cols-2">
         <ChartFrame
           title="Most in-demand skills"
           subtitle="Number of postings requiring each skill"
@@ -92,6 +97,24 @@ export default function AnalyticsPage() {
         >
           <BarChart
             data={topSkills.slice(0, 12).map((s) => ({ label: s.skill_name, value: s.posting_count }))}
+          />
+        </ChartFrame>
+
+        <ChartFrame
+          title="Salary distribution"
+          subtitle="How many postings fall in each salary band"
+          columns={["Band", "Postings"]}
+          rows={distribution.map((d) => [
+            `${money(d.bucket_start)}–${money(d.bucket_start + 25000)}`,
+            d.postings.toLocaleString(),
+          ])}
+        >
+          {/* A histogram, because the average hides the actual shape. The mean is
+              $108,640 and describes almost nobody — there are two populations here, an
+              Indian cluster under $25k and a US cluster around $100-125k. */}
+          <Histogram
+            data={distribution.map((d) => ({ bucket: d.bucket_start, count: d.postings }))}
+            formatBucket={(v) => `$${Math.round(v / 1000)}k`}
           />
         </ChartFrame>
 

@@ -158,3 +158,36 @@ def skill_premium(limit: int = 15):
         """,
         limit=limit,
     )
+
+
+@router.get("/salary-distribution")
+@cached("salary_distribution")
+def salary_distribution(bucket: int = 25_000, ceiling: int = 250_000):
+    """How salaries are actually spread — not just their average.
+
+    The single most useful chart on the page, and the one an average actively hides. The
+    mean here is $108,640, which describes almost nobody: the real shape is two separate
+    populations, a cluster of Indian salaries under $25k and a much larger US cluster
+    around $100–125k. Reporting one number for a bimodal distribution is the classic way an
+    average lies, and a histogram is the form that shows it.
+
+    It also has no small-sample problem, which is why it replaced the skill-premium chart:
+    every salaried posting lands in a bucket, so nothing here rests on 19 rows.
+
+    width_bucket does the binning in Postgres rather than in Python — the database is
+    already scanning the column, and returning 3,275 salaries to bucket them in the API
+    would move the whole dataset over the wire to compute eleven numbers.
+    """
+    return _rows(
+        """
+        SELECT (width_bucket(salary, 0, :ceiling, :buckets) - 1) * :bucket AS bucket_start,
+               COUNT(*)                                                    AS postings
+        FROM analytics.fact_job_posting
+        WHERE salary IS NOT NULL AND is_real
+        GROUP BY 1
+        ORDER BY 1
+        """,
+        ceiling=ceiling,
+        buckets=ceiling // bucket,
+        bucket=bucket,
+    )

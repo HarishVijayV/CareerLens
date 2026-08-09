@@ -628,3 +628,109 @@ export function Lollipop({
     </div>
   );
 }
+
+/**
+ * HISTOGRAM — the shape of a distribution, which an average cannot show.
+ *
+ * Vertical columns with only a hairline between them, because a histogram's bins are
+ * CONTINUOUS: the gap between $50k and $75k is not a category boundary, it is the same
+ * axis carrying on. Wide gaps would make it read as a bar chart of separate things, which
+ * is the most common way this form is drawn wrong.
+ *
+ * Here it is the most informative chart on the page. The mean salary is $108,640 and
+ * describes almost nobody — the real shape is two populations, an Indian cluster under
+ * $25k and a US cluster around $100-125k. A single average for a bimodal distribution is
+ * the textbook way a summary statistic lies, and this is the form that exposes it.
+ */
+export function Histogram({
+  data,
+  formatBucket = (v: number) => v.toLocaleString(),
+  height = 190,
+}: {
+  data: { bucket: number; count: number }[];
+  formatBucket?: (v: number) => string;
+  height?: number;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+
+  if (!data.length) {
+    return <p className="py-12 text-center text-xs text-[var(--text-muted)]">No data yet.</p>;
+  }
+
+  const width = 560;
+  const padding = { top: 14, right: 12, bottom: 34, left: 44 };
+  const plotW = width - padding.left - padding.right;
+  const plotH = height - padding.top - padding.bottom;
+
+  const max = Math.max(...data.map((d) => d.count), 1);
+  const colWidth = plotW / data.length;
+  const barWidth = Math.max(colWidth - 2, 2); // 2px gap: adjacent, not separated
+
+  const ticks = [0, Math.round(max / 2), max];
+
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" role="img" aria-label="salary distribution histogram">
+        {ticks.map((t, i) => {
+          const y = padding.top + plotH - (t / max) * plotH;
+          return (
+            <g key={i}>
+              <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="var(--chart-grid)" strokeWidth={1} />
+              <text x={padding.left - 7} y={y} textAnchor="end" dominantBaseline="central" fill="var(--text-muted)" style={{ fontSize: 10 }}>
+                {t.toLocaleString()}
+              </text>
+            </g>
+          );
+        })}
+
+        {data.map((d, i) => {
+          const h = (d.count / max) * plotH;
+          const x = padding.left + i * colWidth;
+          const y = padding.top + plotH - h;
+          const active = hover === null || hover === i;
+
+          return (
+            <g key={d.bucket} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <rect x={x} y={padding.top} width={colWidth} height={plotH} fill="transparent" />
+              <rect
+                x={x}
+                y={y}
+                width={barWidth}
+                height={Math.max(h, 1)}
+                rx={2}
+                fill="var(--chart-positive)"
+                opacity={active ? 0.92 : 0.4}
+              />
+              {/* Label every other bin — one on each would collide at this width. */}
+              {i % 2 === 0 && (
+                <text
+                  x={x + barWidth / 2}
+                  y={height - 18}
+                  textAnchor="middle"
+                  fill="var(--text-muted)"
+                  style={{ fontSize: 9.5 }}
+                >
+                  {formatBucket(d.bucket)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {hover !== null && (
+        <div
+          className="pointer-events-none absolute rounded border border-[var(--border-subtle)] bg-[var(--surface-card)] px-2 py-1 text-xs shadow-sm"
+          style={{ left: `${((padding.left + hover * colWidth) / width) * 100}%`, top: 0, transform: "translateX(-50%)" }}
+        >
+          <div className="font-medium text-[var(--text-primary)]">
+            {formatBucket(data[hover].bucket)}–{formatBucket(data[hover].bucket + (data[1]?.bucket ?? 25000) - (data[0]?.bucket ?? 0))}
+          </div>
+          <div className="tabular-nums text-[var(--text-secondary)]">
+            {data[hover].count.toLocaleString()} postings
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
