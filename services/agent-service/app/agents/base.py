@@ -37,9 +37,12 @@ MAX_TOOL_ITERATIONS = 6
 # 60-second timeout, so the user saw "the assistant call failed" for a request that was
 # still working.
 #
-# Five searches is already generous for picking three jobs. The cap converts a runaway
-# loop into a slightly-less-informed answer, which is strictly better than no answer.
-MAX_CALLS_PER_TOOL = 5
+# Three is enough to pick three jobs: one broad search, and two refinements if the first
+# was genuinely off. Anything past that is the model guessing at wording rather than
+# reading what it already has — and each extra call is a round trip the user waits for.
+# The cap converts a runaway loop into a slightly-less-informed answer, which is strictly
+# better than an answer that arrives after the request has timed out.
+MAX_CALLS_PER_TOOL = 3
 
 
 @dataclass

@@ -19,7 +19,12 @@ SEARCH_JOBS_TOOL = {
     "name": "search_jobs",
     "description": (
         "Search LIVE job postings the user can actually apply to. Returns real job-board "
-        "listings only, each with a URL."
+        "listings only, each with a URL. "
+        "Search BROADLY on the first call: prefer `skill` and `seniority` over `q`. `q` "
+        "matches the job TITLE exactly, and specific titles like 'Junior Data Scientist' "
+        "usually match nothing — a broad search you then pick from beats several narrow "
+        "ones that return empty. If a result set says the title filter was dropped, that "
+        "IS the answer: read those postings instead of searching again."
     ),
     "input_schema": {
         "type": "object",
