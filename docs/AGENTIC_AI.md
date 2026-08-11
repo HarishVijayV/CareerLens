@@ -75,6 +75,40 @@ able to explain about tool-calling/agent security — it's also why you can safe
 each agent is allowed to touch (e.g. the Email Classifier can read Gmail but can never write to
 your resume).
 
+## Why no sandbox — and the one feature that would need one
+
+A reasonable interview follow-up is *"do you sandbox the AI?"* The answer is no, and the
+reason is the paragraph above rather than an oversight.
+
+The model runs on the provider's servers. It has no filesystem, no database handle, no shell —
+the only thing it can produce is text, and some of that text happens to name a tool. Our Python
+receives that name, checks it against the agent's allow-list, and runs the function itself.
+So there is no code of the model's to contain. `email_classifier` cannot reach your resume not
+because something blocks it, but because `write_resume_tex` was never in its list. **A
+capability that was never granted needs no containment.**
+
+This flips the moment the model writes code we execute. The obvious candidate is an "ask
+anything about the data" box, where the LLM generates SQL against the warehouse. Now a bad or
+adversarial generation can drop a table, read another user's rows, or hang Postgres with a
+runaway join — and least-privilege on tools no longer helps, because the *tool itself* is
+"run arbitrary SQL". Containment has to become real:
+
+- a **read-only Postgres role** scoped to `analytics`, so DDL and writes fail at the database
+- a **statement timeout** plus a row cap, so no one query monopolises the warehouse
+- **allow-list the statement type** — reject anything that isn't a `SELECT`
+- if an agent ever runs generated *Python* (e.g. to plot something), give it a throwaway
+  container with no network and no credentials
+
+The generalisation worth being able to say:
+
+> "A sandbox is what you add when you stop controlling *what* runs and can only control
+> *where* it runs. Right now the model chooses from a fixed tool list, so there's nothing to
+> sandbox — least privilege covers it. Text-to-SQL would change that in a single commit."
+
+Note also that "sandbox" has a second, unrelated meaning — Stripe/PayPal *sandbox* is a
+practice mode with fake data, not an isolation boundary. Worth separating the two if an
+interviewer uses the word loosely. Nothing here uses that kind; there are no payments.
+
 ## Why "multi-agent" instead of one big prompt
 
 Splitting into narrow sub-agents (each with one job, one small tool list, one focused prompt)

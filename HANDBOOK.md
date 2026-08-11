@@ -1336,11 +1336,54 @@ helm install careerlens k8s/helm/careerlens
 | Third-party tokens | Google refresh tokens **encrypted** (Fernet) at rest |
 | Secret leakage | Pre-commit hook blocks key-shaped strings and any `.env` |
 | MCP exposure | Separate service, isolated network, aggregate data only |
+| LLM code execution | **Not possible** — the model picks from a fixed tool list; nothing it returns is ever executed as code |
 
 **The one worth memorising:** *"auth-service trusts the `X-User-Id` header — which is safe
 only because exactly one component can write it. The gateway strips whatever the client
 sent and sets it from the verified JWT. Trusted-header auth is a good pattern behind a
 gateway and a critical vulnerability without one."*
+
+### Sandboxing — what this project has, and the one feature that would demand more
+
+The word means two unrelated things, and interviews conflate them:
+
+| Sandbox | Means | Here |
+|---|---|---|
+| Docker, gVisor, a VM | **isolation** — a locked room, so a failure can't escape | what we have |
+| Stripe / PayPal "sandbox" | **practice mode** — fake data, so nothing costs money | not applicable, no payments |
+
+**What we have is the isolation kind, and it is deliberately modest.** Every service is its
+own container, so a Spark job that exhausts memory or a notifier that crashes takes nothing
+else down. `mcp-net` goes further: a network segment with exactly two members, so
+mcp-server has *no route* to Postgres — not a rule someone can forget to apply.
+
+Say **isolation**, not sandbox, when describing containers. If pushed — *"is a container
+really a sandbox?"* — the honest answer scores better than the confident one:
+
+> "Not a security sandbox. Containers share the host kernel, so it's fault and dependency
+> isolation, not a trust boundary. For genuinely untrusted code I'd need gVisor or a VM."
+
+**The AI layer needs no sandbox at all, for a reason worth stating precisely.** The model
+runs on the provider's servers. It holds no database handle, no filesystem, no shell — the
+only thing it can emit is text naming a tool it would like called. Our Python decides
+whether that call is permitted and runs it. `email_classifier` cannot reach a resume not
+because a wall blocks it, but because that tool was never in its list. *A capability you
+were never granted needs no containment.*
+
+**The one feature that would flip this:** letting the model decide the query. An "ask
+anything about the data" box means the LLM writes SQL and we execute it — and now a bad or
+adversarial generation can `DROP TABLE`, read another user's rows, or hang the warehouse
+with a runaway join. The containment then has to be real:
+
+- a **read-only Postgres role** scoped to `analytics` — DDL and writes simply fail
+- a **statement timeout** and a row cap, so no single query can monopolise the database
+- allow-list the statement type; reject anything that isn't a `SELECT`
+- an agent that runs generated *Python* (say, for a chart) gets a throwaway container with
+  no network and no credentials
+
+> "A sandbox is what you add when you stop controlling *what* runs and can only control
+> *where* it runs. Today the model picks from a fixed tool list, so there's nothing to
+> sandbox. Text-to-SQL would change that in one commit."
 
 ---
 

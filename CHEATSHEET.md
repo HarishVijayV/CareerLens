@@ -272,6 +272,22 @@ back → repeat.** The model executes nothing itself.
 
 Limits: 6 tool calls per agent, 3 per single tool, 4 delegations.
 
+**Why there is no sandbox here — and when there would be.** A sandbox is a locked room you
+run code inside, so a mistake cannot escape it. The model needs none: it runs on the
+provider's servers, it has no filesystem and no database connection, and all it can send
+back is text naming a tool. There is nothing to contain.
+
+That changes the moment the model writes code you execute. If the assistant generated its
+own SQL — an "ask anything about the data" box — one bad query could `DROP TABLE` or read
+another user's rows. **That** is where a sandbox earns its place: a read-only Postgres role
+scoped to `analytics`, a statement timeout, a row cap. Same for an agent writing Python for
+a chart — throwaway container, no network, no credentials.
+
+> "Today the model can't run code, it picks from a fixed tool list — so there's nothing to
+> sandbox. The moment I add text-to-SQL it's writing code I execute, and then it needs a
+> read-only role and a statement timeout. A sandbox is what you add when you stop
+> controlling *what* runs and can only control *where* it runs."
+
 ---
 
 ### L → M → N — Kafka, consumer, notifications
@@ -337,19 +353,98 @@ and `catchup=False` means a missed day is missed rather than queued.
 
 ---
 
-## The two dashboards — what you see and how to read it
+## Ports — every URL in one place
 
-Both only exist when the `bigdata` profile is up:
+Start everything from `infra/`. **Always pass `--profile bigdata`** or Airflow, Kafka UI and
+HDFS silently do not start:
 
 ```bash
-cd infra && docker compose --profile bigdata up -d
+cd infra
+docker compose --profile bigdata up -d
 ```
 
-| URL | What | Login |
+### Open these in a browser
+
+| Port | URL | What | Login |
+|---|---|---|---|
+| **3000** | <http://localhost:3000> | **The app itself** — 10 pages + bell | your own signup |
+| **8080** | <http://localhost:8080> | **Airflow** — did the pipeline run, and did it work? | `admin` / `admin` |
+| **8085** | <http://localhost:8085> | **Kafka UI** — did the events get delivered? | none |
+| **8081** | <http://localhost:8081> | **Adminer** — browse the database directly | see below |
+| 9870 | <http://localhost:9870> | HDFS namenode UI — rarely needed | none |
+
+**For Kafka, 8085 is the only one you open.** The broker on `9092` is not a website — pointing
+a browser at it shows nothing. 8085 is the UI that reads the broker for you.
+
+### APIs — curl, not browser
+
+| Port | Service | Note |
 |---|---|---|
-| <http://localhost:8080> | **Airflow** — did the pipeline run, and did it work? | `admin` / `admin` |
-| <http://localhost:8085> | **Kafka UI** — did the events actually get delivered? | none |
-| <http://localhost:8081> | Adminer — browse the database directly | see below |
+| **8000** | **gateway** | The only public door. The frontend talks to *this*, never the rest |
+| 8001 | auth-service | behind the gateway |
+| 8002 | agent-service | behind the gateway |
+| 8003 | jobs-service | behind the gateway |
+| 8004 | notification-service | behind the gateway |
+| 8005 | mcp-server | on an isolated network with jobs-service only |
+
+Hitting 8001–8005 directly bypasses JWT checks — useful for debugging, and exactly why they
+are not published in a real deployment.
+
+### Infrastructure — no UI
+
+| Port | What |
+|---|---|
+| 5432 | Postgres (`careerlens` / user `careerlens`) |
+| 6379 | Redis (jobs-service cache) |
+| 9092 · 29092 | Kafka broker — `9092` from your machine, `29092` between containers |
+
+`worker-service` and `match-notifier` have **no port** — they are background consumers. You
+check them with `logs`, not a URL.
+
+All ports come from `infra/.env`, so change one there if it collides locally.
+
+---
+
+## Restarting things
+
+```bash
+cd infra
+
+# what is actually up, and on which ports
+docker compose ps
+
+# restart ONE service, leave the rest running
+docker compose --profile bigdata restart airflow-webserver
+docker compose --profile bigdata restart kafka-ui
+
+# watch a service's output (Ctrl+C to stop watching, it keeps running)
+docker compose logs -f airflow-scheduler
+docker compose logs -f match-notifier
+
+# stop everything / start everything
+docker compose --profile bigdata down
+docker compose --profile bigdata up -d
+
+# after changing code in a service
+docker compose --profile bigdata up -d --build jobs-service
+```
+
+Keep `--profile bigdata` on **every** command. Without it Compose does not know those
+services exist, so `restart airflow-webserver` errors and a plain `up -d` brings back
+everything *except* Airflow and Kafka UI.
+
+**Airflow UI up but no DAG runs?** The webserver and the scheduler are two containers — the
+page renders from the webserver, but nothing executes without the scheduler.
+`docker compose --profile bigdata restart airflow-scheduler`.
+
+`down` keeps your data — Postgres, Redis and Kafka are on named volumes. Only `down -v`
+deletes it, which means re-running the whole pipeline.
+
+---
+
+## The two dashboards — what you see and how to read it
+
+Both only exist when the `bigdata` profile is up (see above).
 
 ---
 
